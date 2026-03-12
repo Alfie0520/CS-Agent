@@ -6,7 +6,7 @@ import logging
 import time
 from collections import OrderedDict
 
-from app.agent.default_agent import DefaultAgent
+from app.agent.llm_agent import LLMAgent
 from app.core.xml_parser import build_transfer_kf_xml, parse_xml
 from app.handler.event_handler import handle_event
 from app.handler.message_handler import handle_message
@@ -14,7 +14,7 @@ from app.models.message import MsgType
 
 logger = logging.getLogger(__name__)
 
-_agent = DefaultAgent()
+_agent = LLMAgent()
 
 _seen_msg_ids: OrderedDict[str, float] = OrderedDict()
 _DEDUP_TTL = 30  # 30 秒内同一 MsgId 视为重复
