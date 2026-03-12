@@ -51,6 +51,10 @@ app/
 
 特殊情况：用户发送「转人工」→ 同步返回 `transfer_customer_service` XML，微信将后续会话转交人工客服。
 
+## 文档
+
+- [消息链路说明](docs/消息链路说明.md) — 从用户发消息到收到回复的完整链路（面向 PM）
+
 ## 微信开发者平台配置
 
 1. 服务器 URL：`http://your-server-ip/wx`
