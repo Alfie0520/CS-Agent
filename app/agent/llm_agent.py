@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from openai import AsyncOpenAI
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agent.base import BaseAgent
 from app.agent.session_store import SessionStore
@@ -18,11 +18,13 @@ logger = logging.getLogger(__name__)
 
 def _build_pydantic_agent() -> Agent[None, str]:
     settings = get_settings()
-    client = AsyncOpenAI(
-        api_key=settings.minimax_api_key,
-        base_url=settings.minimax_base_url,
+    model = OpenAIModel(
+        settings.minimax_model,
+        provider=OpenAIProvider(
+            api_key=settings.minimax_api_key,
+            base_url=settings.minimax_base_url,
+        ),
     )
-    model = OpenAIModel(settings.minimax_model, openai_client=client)
     return Agent(model, system_prompt=settings.minimax_system_prompt)
 
 
