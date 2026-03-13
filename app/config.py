@@ -13,6 +13,17 @@ class Settings(BaseSettings):
 
     wechat_api_base_url: str = "https://api.weixin.qq.com"
 
+    # MiniMax LLM
+    minimax_api_key: str = ""
+    minimax_base_url: str = "https://api.minimax.chat/v1"
+    minimax_model: str = "MiniMax-Text-01"
+    minimax_system_prompt: str = (
+        "你是一个专业、耐心的客服助手。请用简洁友好的中文回答用户问题。"
+        "如果用户需要人工客服，告知其回复「转人工」即可转接。"
+    )
+    # 多轮对话历史保留时长（秒），超时后清空上下文
+    session_ttl: int = 1800
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
