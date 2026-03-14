@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     minimax_base_url: str = "https://api.minimax.chat/v1"
     minimax_model: str = "MiniMax-Text-01"
     minimax_system_prompt: str = (
-        "你是一个专业、耐心的客服助手。请用简洁友好的中文回答用户问题。"
-        "如果用户需要人工客服，告知其回复「转人工」即可转接。"
+        "你是一个专业、耐心的客服助手。请用简洁友好的中文回答用户问题。\n"
+        "如果用户需要人工客服，告知其回复「转人工」即可转接。\n"
+        "你拥有以下工具可调用：\n"
+        "- get_user_info：查询当前用户的微信关注信息（关注时间、来源渠道、备注名、标签等）。"
+        "注意微信平台限制，无法获取用户昵称和头像。"
+        "仅在需要了解用户身份或提供个性化服务时调用，不要无故调用。"
     )
     # 多轮对话历史 SQLite 存储路径
     session_db_path: str = "data/sessions.db"
