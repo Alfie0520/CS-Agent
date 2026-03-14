@@ -43,7 +43,7 @@ class LLMAgent(BaseAgent):
     def __init__(self) -> None:
         settings = get_settings()
         self._agent = _build_pydantic_agent()
-        self._sessions = SessionStore(ttl=settings.session_ttl)
+        self._sessions = SessionStore(db_path=settings.session_db_path, ttl=settings.session_ttl)
 
     async def handle(self, message: IncomingMessage) -> AgentResponse:
         if message.msg_type == MsgType.EVENT:
@@ -66,11 +66,11 @@ class LLMAgent(BaseAgent):
         if not user_input:
             return AgentResponse()
 
-        history = self._sessions.get(msg.from_user)
+        history = await self._sessions.get(msg.from_user)
 
         try:
             result = await self._agent.run(user_input, message_history=history)
-            self._sessions.set(msg.from_user, result.all_messages())
+            await self._sessions.set(msg.from_user, result.all_messages())
             reply_text = result.output
         except Exception:
             logger.exception("LLM call failed for user %s", msg.from_user)
