@@ -71,7 +71,7 @@ class LLMAgent(BaseAgent):
         try:
             result = await self._agent.run(user_input, message_history=history)
             await self._sessions.set(msg.from_user, result.all_messages())
-            reply_text = result.output
+            reply_text = result.output.strip()
         except Exception:
             logger.exception("LLM call failed for user %s", msg.from_user)
             reply_text = "抱歉，AI 助手暂时出现了问题，请稍后再试，或回复「转人工」联系人工客服。"
