@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -13,6 +14,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from app.agent.base import BaseAgent
 from app.agent.session_store import SessionStore
 from app.config import get_settings
+from app.media_index import get_overview, list_schemes, search
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
 from app.wechat_api.client import wechat_get
 
@@ -93,6 +95,60 @@ async def get_user_info(ctx: RunContext[UserDeps]) -> str:
     )
 
 
+@_pydantic_agent.tool
+async def get_visit_scheme_overview(ctx: RunContext[UserDeps]) -> str:
+    """查看参访方案概览：有多少个地理位置分类、每个分类下有多少个方案。
+
+    分类名即文件夹名，按地理位置命名（如 09河南、广东-深圳）。
+    用于回答「有哪些参访方案」「覆盖哪些地区」「一共多少方案」等。
+    """
+    data = get_overview()
+    total = data.get("total", 0)
+    cats = data.get("categories", {})
+    lines = [f"参访方案总数：{total} 个", "按地理位置分类："]
+    for name, count in cats.items():
+        lines.append(f"  - {name}：{count} 个")
+    return "\n".join(lines)
+
+
+@_pydantic_agent.tool
+async def list_visit_schemes(ctx: RunContext[UserDeps], category: str = "") -> str:
+    """按地理位置（分类）列出该地区下的所有企业参访方案。
+
+    Args:
+        category: 分类名（如 09河南、广东-深圳），为空则列出全部方案。
+    """
+    items = list_schemes(category=category if category else None)
+    if not items:
+        return f"未找到方案。" + (f"（分类「{category}」不存在或为空）" if category else "")
+    lines = [f"共 {len(items)} 个方案："]
+    for x in items:
+        lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）")
+    return "\n".join(lines)
+
+
+@_pydantic_agent.tool
+async def search_visit_scheme(ctx: RunContext[UserDeps], query: str) -> str:
+    """按地理位置或企业名称搜索参访方案，返回匹配的 media_id 供发送图片。
+
+    Args:
+        query: 搜索关键词，如「华为」「深圳」「河南」等。
+
+    Returns:
+        匹配结果，包含 media_id。若需发送图片，在回复末尾写 IMAGE:media_id。
+    """
+    items = search(query)
+    if not items:
+        return f"未找到与「{query}」匹配的参访方案。"
+    if len(items) == 1:
+        x = items[0]
+        return f"找到：{x.get('image_name', '')}（{x.get('category', '')}），media_id={x.get('media_id', '')}。回复时在末尾写 IMAGE:{x.get('media_id', '')} 即可发送。"
+    lines = [f"找到 {len(items)} 个匹配，请选一个发送："]
+    for x in items:
+        lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）：IMAGE:{x.get('media_id', '')}")
+    return "\n".join(lines)
+
+
 _WELCOME = (
     "你好，欢迎关注！\n"
     "我是 AI 客服助手，有任何问题请直接发送文字消息，我会尽力为您解答。\n"
@@ -145,4 +201,18 @@ class LLMAgent(BaseAgent):
             logger.exception("LLM call failed for user %s", msg.from_user)
             reply_text = "抱歉，AI 助手暂时出现了问题，请稍后再试，或回复「转人工」联系人工客服。"
 
-        return AgentResponse(replies=[ReplyContent(msg_type="text", text=reply_text)])
+        # 解析 IMAGE:media_id，取最后一个（LLM 选定要发送的）
+        replies: list[ReplyContent] = []
+        image_media_id: str | None = None
+        matches = re.findall(r"IMAGE:(\S+)", reply_text)
+        if matches:
+            image_media_id = matches[-1].strip()
+            reply_text = re.sub(r"IMAGE:\S+", "", reply_text)  # 移除所有 IMAGE:xxx
+            reply_text = re.sub(r"\n{2,}", "\n", reply_text).strip()  # 合并多余空行
+
+        if reply_text:
+            replies.append(ReplyContent(msg_type="text", text=reply_text))
+        if image_media_id:
+            replies.append(ReplyContent(msg_type="image", media_id=image_media_id))
+
+        return AgentResponse(replies=replies)
