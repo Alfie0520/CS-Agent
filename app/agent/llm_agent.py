@@ -128,6 +128,20 @@ async def list_visit_schemes(ctx: RunContext[UserDeps], category: str = "") -> s
 
 
 @_pydantic_agent.tool
+async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
+    """获取公司老板微信二维码的 media_id，用于发送给用户添加好友。
+
+    当用户询问如何联系、加微信、咨询对接、商务合作、想和负责人沟通时调用。
+    获取后需在回复末尾写 IMAGE:media_id 以触发发送二维码图片。
+    """
+    settings = get_settings()
+    media_id = (settings.wechat_qr_code_media_id or "").strip()
+    if not media_id:
+        return "微信二维码未配置，请联系管理员在 .env 中设置 WECHAT_QR_CODE_MEDIA_ID。"
+    return f"公司老板微信二维码 media_id={media_id}。回复时在末尾写 IMAGE:{media_id} 即可发送。"
+
+
+@_pydantic_agent.tool
 async def search_visit_scheme(ctx: RunContext[UserDeps], query: str) -> str:
     """按地理位置或企业名称搜索参访方案，返回匹配的 media_id 供发送图片。
 

@@ -31,8 +31,12 @@ class Settings(BaseSettings):
         "- search_visit_scheme：按地理位置或企业名称搜索参访方案，返回匹配的 media_id。"
         "当用户明确要某地或某企业的方案时调用，获取 media_id 后需在回复末尾单独一行写 IMAGE:media_id 以触发发送图片。"
         "若有多条匹配，选最相关的一条发送，或询问用户具体要哪个。\n"
-        "发送图片时：先给用户简短文字说明，再在回复最后一行写 IMAGE:media_id（从 search_visit_scheme 获取）。"
+        "发送图片时：先给用户简短文字说明，再在回复最后一行写 IMAGE:media_id（从 search_visit_scheme 或 get_wechat_qr_code 获取）。\n"
+        "- get_wechat_qr_code：获取公司老板微信二维码的 media_id。当用户询问如何联系、加微信、咨询对接、商务合作时调用，回复末尾写 IMAGE:media_id 发送二维码。"
     )
+    # 公司老板微信二维码 media_id（用于 get_wechat_qr_code 工具）
+    wechat_qr_code_media_id: str = ""
+
     # 多轮对话历史 SQLite 存储路径
     session_db_path: str = "data/sessions.db"
     # 对话历史保留时长（秒），0 = 永不过期
