@@ -16,7 +16,7 @@ from app.agent.session_store import SessionStore
 from app.config import get_settings
 from app.media_index import get_overview, list_schemes, search
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
-from app.wechat_api.client import wechat_get
+from app.wechat_api.client import wechat_get, wechat_post
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +160,145 @@ async def search_visit_scheme(ctx: RunContext[UserDeps], query: str) -> str:
     lines = [f"找到 {len(items)} 个匹配，请选一个发送："]
     for x in items:
         lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）：IMAGE:{x.get('media_id', '')}")
+    return "\n".join(lines)
+
+
+@_pydantic_agent.tool
+async def list_published_articles(ctx: RunContext[UserDeps], offset: int = 0, count: int = 10) -> str:
+    """获取已发布的图文消息列表。
+
+    Args:
+        offset: 从全部素材的该偏移位置开始返回，0表示从第一个素材返回，默认为0。
+        count: 返回素材的数量，取值在1到20之间，默认为10。
+
+    Returns:
+        已发布图文消息列表，每条消息包含标题、作者、摘要、封面图片URL、发布时间、article_id等信息。
+
+    适用场景：
+    - 用户询问「有哪些文章」「发布了什么内容」
+    - 用户想了解公众号历史发布内容
+    - 用户想查看特定主题的文章列表
+    """
+    data = await wechat_post(
+        "/cgi-bin/freepublish/batchget",
+        {"offset": offset, "count": count, "no_content": 0}
+    )
+
+    if data.get("errcode", 0) != 0:
+        return f"获取文章列表失败：{data.get('errmsg', '未知错误')}"
+
+    total_count = data.get("total_count", 0)
+    items = data.get("item", [])
+
+    if not items:
+        return f"暂无已发布的文章。"
+
+    lines = [f"共找到 {total_count} 篇已发布文章，当前显示 {len(items)} 篇：\n"]
+    for idx, item in enumerate(items, start=offset + 1):
+        content = item.get("content", {})
+        news_item = content.get("news_item", [])
+        if news_item:
+            article = news_item[0]
+            title = article.get("title", "无标题")
+            author = article.get("author", "未知")
+            digest = article.get("digest", "无摘要")
+            thumb_url = article.get("thumb_url", "")
+            update_time = item.get("update_time", 0)
+            article_id = item.get("article_id", "")
+            if update_time:
+                from datetime import datetime
+                update_time_str = datetime.fromtimestamp(update_time).strftime("%Y-%m-%d")
+            else:
+                update_time_str = "未知"
+            lines.append(f"{idx}. {title}")
+            lines.append(f"   作者：{author} | 发布时间：{update_time_str}")
+            if digest:
+                lines.append(f"   摘要：{digest[:50]}...")
+            if thumb_url:
+                lines.append(f"   封面图：{thumb_url}")
+            lines.append(f"   Article ID：{article_id}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+@_pydantic_agent.tool
+async def get_article_detail(ctx: RunContext[UserDeps], article_id: str) -> str:
+    """获取指定文章的详细内容。
+
+    Args:
+        article_id: 图文消息的article_id，可在list_published_articles返回中找到。
+
+    Returns:
+        文章的完整内容，包括标题、作者、正文（HTML格式）、原文链接、封面图片等信息。
+
+    适用场景：
+    - 用户想查看某篇文章的详细内容
+    - 用户想了解文章的具体信息
+    - 用户想获取文章的原文链接
+    """
+    if not article_id or not article_id.strip():
+        return "article_id不能为空，请提供有效的article_id。"
+
+    data = await wechat_post(
+        "/cgi-bin/freepublish/getarticle",
+        {"article_id": article_id.strip()}
+    )
+
+    if data.get("errcode", 0) != 0:
+        err_msg = data.get("errmsg", "未知错误")
+        if data.get("errcode") == 53600:
+            return f"Article ID无效，请确认提供的article_id是否正确。"
+        return f"获取文章详情失败：{err_msg}"
+
+    news_item = data.get("news_item", [])
+    if not news_item:
+        return "未找到该文章的详细信息。"
+
+    article = news_item[0]
+    title = article.get("title", "无标题")
+    author = article.get("author", "未知")
+    digest = article.get("digest", "无摘要")
+    content = article.get("content", "")
+    content_source_url = article.get("content_source_url", "")
+    thumb_url = article.get("thumb_url", "")
+    need_open_comment = article.get("need_open_comment", 0)
+    only_fans_can_comment = article.get("only_fans_can_comment", 0)
+    url = article.get("url", "")
+
+    lines = [
+        f"【{title}】",
+        f"",
+        f"作者：{author}",
+        f"",
+    ]
+
+    if digest:
+        lines.append(f"摘要：{digest}")
+        lines.append("")
+
+    if content_source_url:
+        lines.append(f"原文链接：{content_source_url}")
+        lines.append("")
+
+    if url:
+        lines.append(f"文章链接：{url}")
+        lines.append("")
+
+    if thumb_url:
+        lines.append(f"封面图片：{thumb_url}")
+        lines.append("")
+
+    comment_status = "已开启评论" if need_open_comment == 1 else "未开启评论"
+    if need_open_comment == 1 and only_fans_can_comment == 1:
+        comment_status += "（仅粉丝可评论）"
+    lines.append(f"评论状态：{comment_status}")
+    lines.append("")
+
+    if content:
+        content_preview = content[:500] + "..." if len(content) > 500 else content
+        lines.append(f"正文内容：\n{content_preview}")
+
     return "\n".join(lines)
 
 
