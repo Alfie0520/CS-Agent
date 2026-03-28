@@ -9,7 +9,7 @@ from typing import Any
 
 def get_index_path() -> Path:
     """索引文件路径，位于 data/ 目录下，不随代码提交。"""
-    return Path("data/media_index.json")
+    return Path("/data/media_index.json")
 
 
 def _load() -> list[dict[str, str]]:
