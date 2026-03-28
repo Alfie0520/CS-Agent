@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Form, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 
 from app.config import get_settings
@@ -73,12 +73,12 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
 
 @app.post("/api/visit-image")
 async def manage_visit_image(
-    operation: str,
-    image_name: str | None = None,
-    category: str | None = None,
-    base64_data: str | None = None,
-    media_id: str | None = None,
-    api_key: str | None = None,
+    operation: str = Form(...),
+    image_name: str | None = Form(None),
+    category: str | None = Form(None),
+    base64_data: str | None = Form(None),
+    media_id: str | None = Form(None),
+    api_key: str | None = Form(None),
 ):
     """参访方案图片增删改接口。
 
