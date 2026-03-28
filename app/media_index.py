@@ -92,3 +92,23 @@ def exists(category: str, image_name: str) -> bool:
         x.get("category") == category and x.get("image_name") == image_name
         for x in items
     )
+
+
+def get_by_media_id(media_id: str) -> dict[str, str] | None:
+    """根据 media_id 查询单条记录。"""
+    items = _load()
+    for x in items:
+        if x.get("media_id") == media_id:
+            return x
+    return None
+
+
+def delete(media_id: str) -> bool:
+    """根据 media_id 删除一条记录，返回是否删除成功。"""
+    items = _load()
+    original_len = len(items)
+    items = [x for x in items if x.get("media_id") != media_id]
+    if len(items) < original_len:
+        _save(items)
+        return True
+    return False

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # 对话历史保留时长（秒），0 = 永不过期
     session_ttl: int = 0
 
+    # 参访图片 API 访问密钥
+    visit_image_api_key: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
