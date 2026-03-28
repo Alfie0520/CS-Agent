@@ -15,7 +15,7 @@
     cd /path/to/CS-Agent
     python scripts/upload_visit_images.py /path/to/images
 
-    索引写入 media_index.json，可随代码提交。
+    索引写入 media_index.json，该文件不应提交到代码仓库。
     已存在的 (category, image_name) 会跳过，实现增量上传。
 """
 
