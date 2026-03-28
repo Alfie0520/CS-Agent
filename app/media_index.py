@@ -8,8 +8,8 @@ from typing import Any
 
 
 def get_index_path() -> Path:
-    """索引文件路径，位于项目根目录，可随代码提交。"""
-    return Path("media_index.json")
+    """索引文件路径，位于 data/ 目录下，不随代码提交。"""
+    return Path("data/media_index.json")
 
 
 def _load() -> list[dict[str, str]]:
@@ -25,6 +25,7 @@ def _load() -> list[dict[str, str]]:
 def _save(items: list[dict[str, str]]) -> None:
     """保存索引。"""
     path = get_index_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
