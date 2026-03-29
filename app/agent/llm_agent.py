@@ -6,6 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
@@ -46,7 +47,12 @@ def _build_pydantic_agent() -> Agent[UserDeps, str]:
             base_url=settings.minimax_base_url,
         ),
     )
-    return Agent(model, system_prompt=settings.minimax_system_prompt, deps_type=UserDeps)
+    
+    # 读取 base_role.md 作为全局 System Prompt
+    base_role_path = Path(settings.prompt_base_role_path)
+    system_prompt = base_role_path.read_text(encoding="utf-8") if base_role_path.exists() else ""
+    
+    return Agent(model, system_prompt=system_prompt, deps_type=UserDeps)
 
 
 # 模块级 Agent 实例，工具通过装饰器注册在此
@@ -342,9 +348,20 @@ class LLMAgent(BaseAgent):
 
         history = await self._sessions.get(msg.from_user)
 
+        # 读取 strict_rules.md
+        settings = get_settings()
+        strict_rules_path = Path(settings.prompt_strict_rules_path)
+        strict_rules = strict_rules_path.read_text(encoding="utf-8") if strict_rules_path.exists() else ""
+        
+        # 组装本次发给 LLM 的最终 prompt
+        # 将 strict_rules 拼接在用户当前输入之前，强化近期注意力
+        final_prompt = user_input
+        if strict_rules:
+            final_prompt = f"{strict_rules}\n\n[User Latest Message]:\n{user_input}"
+
         try:
             result = await self._agent.run(
-                user_input,
+                final_prompt,
                 message_history=history,
                 deps=UserDeps(openid=msg.from_user),
             )
