@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     wechat_qr_code_media_id: str = ""
 
     # 多轮对话历史 SQLite 存储路径
-    session_db_path: str = "data/sessions.db"
+    session_db_path: str = "/data/sessions.db"
     # 对话历史保留时长（秒），0 = 永不过期
     session_ttl: int = 0
 
