@@ -1,0 +1,76 @@
+来源：https://kf.weixin.qq.com/api/doc/path/93349
+标题：素材管理（微信客服 API）
+
+================================================================================
+素材管理
+================================================================================
+
+概述
+----
+企业使用自定义的资源时，比如发送本地图片、视频等。为了实现同一资源文件，一次上传可以多次使用，提供了素材管理接口：以 media_id 来标识资源文件，实现文件的上传与下载。
+
+上传临时素材
+------------
+把媒体文件上传到微信客服的服务器。
+
+说明：素材上传得到 media_id，该 media_id 仅三天内有效。
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=ACCESS_TOKEN&type=TYPE
+
+使用 multipart/form-data POST 上传文件，文件标识名为 "media"。
+
+参数说明：
+  access_token  必填  调用接口凭证
+  type          必填  媒体文件类型：图片（image）、语音（voice）、视频（video）、普通文件（file）
+
+POST 请求包中，form-data 中媒体文件标识，应包含有 filename、filelength、content-type 等信息。
+filename 标识文件展示的名称；使用该 media_id 发消息时，展示的文件名由该字段控制。
+
+请求示例（HTTP 片段）：
+POST https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=accesstoken001&type=file HTTP/1.1
+Content-Type: multipart/form-data; boundary=-------------------------acebdf13572468
+（正文为 multipart 边界与 media 字段）
+
+返回数据示例（JSON）：
+{
+   "errcode": 0,
+   "errmsg": "",
+   "type": "image",
+   "media_id": "1G6nrLmr5EC3MMb_-zK1dDdzmd0p7cNliYu9V5w7o8K0",
+   "created_at": "1380000000"
+}
+
+返回字段说明：
+  type        媒体文件类型：image / voice / video / file
+  media_id    媒体文件上传后获取的唯一标识，3 天内有效
+  created_at  媒体文件上传时间戳
+
+上传限制：
+  - 所有文件 size 必须大于 5 个字节
+  - 图片（image）：2MB，支持 JPG、PNG
+  - 语音（voice）：2MB，播放长度不超过 60s，仅支持 AMR
+  - 视频（video）：10MB，支持 MP4
+  - 普通文件（file）：20MB
+
+获取临时素材
+------------
+获取微信客服的临时素材，即下载临时的多媒体文件。
+
+请求方式：GET（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/media/get?access_token=ACCESS_TOKEN&media_id=MEDIA_ID
+
+参数说明：
+  access_token  必填  调用接口凭证
+  media_id      必填  媒体文件 id（见上传临时素材）
+
+返回说明：
+  正确时返回与普通 HTTP 下载相同，请根据 HTTP 头做相应处理（如 Content-Type、Content-disposition 等）。
+  错误时返回 JSON，例如：
+  { "errcode": 40007, "errmsg": "invalid media_id" }
+
+断点 / 分块下载：
+  支持在 HTTP header 里指定 Range 进行分块下载；文件很大、可能下载超时时推荐使用。
+  示例：curl 'https://qyapi.weixin.qq.com/cgi-bin/media/get?access_token=ACCESS_TOKEN&media_id=MEDIA_ID' -i -H "Range: bytes=0-1023"
+  服务器可能返回 206 Partial Content，响应头含 Accept-Ranges、Content-Range 等。
+  协议细节可参考 RFC 7233（Range Requests）。

@@ -1,0 +1,228 @@
+来源：https://kf.weixin.qq.com/api/doc/path/94744
+标题：发送消息（微信客服 API）
+
+================================================================================
+发送消息
+================================================================================
+
+概述
+----
+当用户主动发送消息给微信客服时，企业可在 48 小时内调用该接口发送消息给用户，最多可发送 5 条消息给客户；若用户继续发送消息，企业可再次下发消息。
+
+支持发送消息类型：文本、图片、语音、视频、文件、图文、小程序、菜单消息、地理位置、名片、获客链接。
+
+用户动作与限制：
+  用户发送消息 -> 允许下发条数限制：5 条；下发时限：48 小时
+
+接口定义
+--------
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg?access_token=ACCESS_TOKEN
+
+参数说明：
+  access_token  必填  调用接口凭证
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+    "msgid": "MSG_ID"
+}
+
+返回字段说明：
+  errcode  int32   返回码
+  errmsg   string  错误码描述
+  msgid    string  消息 ID。若请求参数指定了 msgid 则原样返回，否则系统自动生成并返回。若指定 msgid，开发者需确保客服账号内唯一，否则接口返回错误。不多于 32 字节，取值范围（正则）：[0-9a-zA-Z_-]*
+
+--------------------------------------------------------------------------------
+消息类型与请求体
+--------------------------------------------------------------------------------
+
+一、文本消息（msgtype: text）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "text",
+   "text" : {
+       "content" : "你购买的物品已发货，可点击链接查看物流状态http://work.weixin.qq.com/xxxxxx"
+   }
+}
+参数：
+  touser        必填  string  指定接收消息的客户 UserID
+  open_kfid     必填  string  指定发送消息的客服账号 ID
+  msgid         否    string  指定消息 ID
+  msgtype       必填  string  固定为 text
+  text          必填  obj     文本消息
+  text.content  必填  string  消息内容，最长不超过 2048 个字节
+
+二、图片消息（msgtype: image）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "image",
+   "image" : { "media_id" : "MEDIA_ID" }
+}
+参数：
+  image.media_id  必填  string  图片文件 id，可调用上传临时素材接口获取
+
+三、语音消息（msgtype: voice）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgtype" : "voice",
+   "voice" : { "media_id" : "MEDIA_ID" }
+}
+参数：
+  voice.media_id  必填  string  语音文件 id，可调用上传临时素材接口获取
+
+四、视频消息（msgtype: video）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "video",
+   "video" : { "media_id" : "MEDIA_ID" }
+}
+参数：
+  video.media_id  必填  string  视频媒体文件 id，可调用上传临时素材接口获取
+
+五、文件消息（msgtype: file）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "file",
+   "file" : { "media_id" : "1Yv-zXfHjSjU-7LH-GwtYqDGS-zz6w22KmWAT5COgP7o" }
+}
+参数：
+  file.media_id  必填  string  文件 id，可调用上传临时素材接口获取
+
+六、图文链接消息（msgtype: link）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "link",
+   "link" : {
+       "title" : "企业如何增长？企业微信给出3个答案",
+       "desc" : "今年中秋节公司有豪礼相送",
+       "url" : "URL",
+       "thumb_media_id": "MEDIA_ID"
+   }
+}
+参数：
+  link.title          必填  string  标题，不超过 128 个字节，超过会自动截断
+  link.desc           否    string  描述，不超过 512 个字节，超过会自动截断
+  link.url            必填  string  点击后跳转的链接，最长 2048 字节，须含协议头 http/https
+  link.thumb_media_id 必填  string  缩略图 media_id（素材管理上传接口返回的 media_id）
+
+七、小程序消息（msgtype: miniprogram）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "miniprogram",
+   "miniprogram" : {
+       "appid": "APPID",
+       "title": "欢迎报名夏令营",
+       "thumb_media_id": "MEDIA_ID",
+       "pagepath": "PAGE_PATH"
+   }
+}
+参数：
+  miniprogram.appid           必填  string  小程序 appid
+  miniprogram.title           否    string  标题，最多 64 个字节，超过会自动截断
+  miniprogram.thumb_media_id  必填  string  封面 mediaid，建议尺寸 520*416
+  miniprogram.pagepath        必填  string  小程序页面路径；路径要以 .html 为后缀，否则在微信中打开可能提示找不到页面
+
+八、菜单消息（msgtype: msgmenu）
+示例（JSON）：
+{
+    "touser": "EXTERNAL_USERID",
+    "open_kfid": "OPEN_KFID",
+    "msgid": "MSGID",
+    "msgtype": "msgmenu",
+    "msgmenu": {
+        "head_content": "您对本次服务是否满意呢? ",
+        "list": [
+            { "type": "click", "click": { "id": "101", "content": "满意" } },
+            { "type": "click", "click": { "id": "102", "content": "不满意" } },
+            { "type": "view", "view": { "url": "https://work.weixin.qq.com", "content": "点击跳转到自助查询页面" } },
+            { "type": "miniprogram", "miniprogram": { "appid": "wx123123123123123", "pagepath": "pages/index?userid=zhangsan&orderid=123123123", "content": "点击打开小程序查询更多" } },
+            { "type": "text", "text": { "content": "纯文本，支持\n换行", "no_newline": 0 } }
+        ],
+        "tail_content": "欢迎再次光临"
+    }
+}
+参数摘要：
+  msgmenu.head_content   否  string  起始文本，不多于 1024 字节
+  msgmenu.list           否  数组   菜单项，不超过 10 个
+  list[].type            必填 string  菜单类型：click / view / miniprogram / text
+  click：click.id、click.content；view：view.url、view.content；miniprogram：appid、pagepath、content；text：text.content，可选 text.no_newline（0 换行，1 不换行，默认 0）
+  msgmenu.tail_content   否  string  结束文本，不多于 1024 字节
+说明：用户点击「满意」「不满意」等 click 菜单后，会自动回复一条文本消息并附带对应菜单 ID。
+
+九、地理位置消息（msgtype: location）
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "location",
+   "location": {
+       "name": "测试小区",
+       "address": "实例小区，不真实存在，经纬度无意义",
+       "latitude": 0,
+       "longitude": 0
+   }
+}
+参数：
+  location.name       否  string  位置名
+  location.address    否  string  地址详情说明
+  location.latitude   必填 float 纬度，范围 90 ~ -90
+  location.longitude  必填 float 经度，范围 180 ~ -180
+
+十、名片消息（msgtype: business_card）
+限制条件（摘要）：
+  - 获客链接消息相关规则以官方文档为准
+  - 名片对应成员需具备「客户联系」使用权限（见企业微信开发者文档 path/92576）
+  - 48 小时内客户有主动发送消息后（点击菜单消息不算），才可发送名片
+  - 48 小时内仅可发送一条名片消息（再次发送需与上次间隔 48 小时）
+
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "business_card",
+   "business_card": { "userid": "USERID" }
+}
+参数：
+  business_card.userid  必填  string  成员 userid；第三方应用填密文 userid（open_userid）
+
+十一、获客链接消息（msgtype: ca_link）
+说明：将获客链接转成名片消息下发给微信客户；获客助手数据统计规则见官方文档 path/97375、path/97394。
+
+示例：
+{
+   "touser" : "EXTERNAL_USERID",
+   "open_kfid": "OPEN_KFID",
+   "msgid": "MSGID",
+   "msgtype" : "ca_link",
+   "ca_link": { "link_url": "https://work.weixin.qq.com/ca/xxxxxx" }
+}
+参数：
+  ca_link.link_url  必填  string  通过获客助手创建的获客链接
+
+本节文档结构（便于对照官网目录）：概述、接口定义、消息类型（文本/图片/语音/视频/文件/图文链接/小程序/菜单/地理位置/名片/获客链接）。
