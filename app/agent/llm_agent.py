@@ -348,11 +348,16 @@ class LLMAgent(BaseAgent):
 
         history = await self._sessions.get(msg.from_user)
 
+        # slash 命令：/clearsession
+        if user_input.strip() == "/clearsession":
+            await self._sessions.clear(msg.from_user)
+            return AgentResponse(replies=[ReplyContent(msg_type="text", text="对话历史已清空。")])
+
         # 读取 strict_rules.md
         settings = get_settings()
         strict_rules_path = Path(settings.prompt_strict_rules_path)
         strict_rules = strict_rules_path.read_text(encoding="utf-8") if strict_rules_path.exists() else ""
-        
+
         # 组装本次发给 LLM 的最终 prompt
         # 如果是测试命令模式，跳过 strict_rules，并强制附加执行指令，同时清空历史上下文
         if user_input.startswith("/test"):
