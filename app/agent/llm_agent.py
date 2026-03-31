@@ -135,6 +135,32 @@ async def list_visit_schemes(ctx: RunContext[UserDeps], category: str = "") -> s
 
 
 @_pydantic_agent.tool
+async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
+    """立即向用户推送一条消息，无需等待当前回复完成。
+
+    用于在处理复杂请求时主动告知用户进展，避免用户因等待过久而流失。
+    调用后消息会立刻送达用户微信，agent 随后继续执行其余逻辑。
+
+    使用时机：
+    - 用户的请求需要查询工具或整理大量信息（预计耗时较长）时，先推送一条简短的"正在处理"提示
+    - 需要将回复拆成多段时：先推送前几段，最终输出作为最后一段
+    - 简单打招呼、一句话能直接回答的问题——不需要调用此工具，直接在最终输出里回复即可
+
+    注意：内容必须是纯文本，不能包含 Markdown 语法。
+
+    Args:
+        content: 要立即推送给用户的消息内容。
+    """
+    try:
+        from app.wechat_api import customer_message
+        await customer_message.send_text(ctx.deps.openid, content)
+        return "消息已推送。"
+    except Exception as e:
+        logger.warning("push_message failed for %s: %s", ctx.deps.openid, e)
+        return f"推送失败：{e}"
+
+
+@_pydantic_agent.tool
 async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
     """获取公司老板微信二维码的 media_id，用于发送给用户添加好友。
 
