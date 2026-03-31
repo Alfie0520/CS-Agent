@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIModel, OpenAIModelSettings
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agent.base import BaseAgent
@@ -53,7 +53,12 @@ def _build_pydantic_agent() -> Agent[UserDeps, str]:
     base_role_path = Path(settings.prompt_base_role_path)
     system_prompt = base_role_path.read_text(encoding="utf-8") if base_role_path.exists() else ""
     
-    return Agent(model, system_prompt=system_prompt, deps_type=UserDeps)
+    return Agent(
+        model,
+        system_prompt=system_prompt,
+        deps_type=UserDeps,
+        model_settings=OpenAIModelSettings(parallel_tool_calls=False),
+    )
 
 
 # 模块级 Agent 实例，工具通过装饰器注册在此
