@@ -15,6 +15,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from app.agent.base import BaseAgent
 from app.agent.session_store import SessionStore
 from app.config import get_settings
+from app.enterprise_data import fmt_detail, fmt_overview, get_detail, search_overview
 from app.media_index import get_overview, list_schemes, search
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
 from app.wechat_api.client import wechat_get, wechat_post
@@ -306,6 +307,67 @@ async def get_article_detail(ctx: RunContext[UserDeps], article_id: str) -> str:
         lines.append(f"正文内容：\n{content_preview}")
 
     return "\n".join(lines)
+
+
+@_pydantic_agent.tool
+async def query_enterprises_overview(
+    ctx: RunContext[UserDeps],
+    city: str = "",
+    keyword: str = "",
+    themes: list[str] | None = None,
+    limit: int = 30,
+) -> str:
+    """【全量参访方案概览检索】快速查询标杆企业的城市、名称和主题方向，用于：
+    - 用户询问"你们有哪些参访资源"、"有没有XX方向的企业"、"XX城市有哪些可以去"
+    - 用户给出大致方向（城市/行业/主题）时，帮助筛选出匹配的候选企业列表
+    - 需要给用户呈现全局参访资源地图、快速展示我们的资源广度时
+    - 生成参访方案前，先获取候选企业池作为基础上下文
+
+    返回结果仅含 id、城市、企业名、主题标签，精简高效，不包含详细内容。
+    若需某企业的具体价值、知识点或能解决的痛点，请调用 get_enterprise_detail。
+
+    Args:
+        city: 城市名关键词，支持子串匹配（如"深圳"、"浙江"、"北京"）。不传则不限城市。
+        keyword: 在企业名、城市、主题标签中做全文子串搜索；无精确命中时自动对企业名做
+                 模糊匹配兜底（如"华威"能匹配"华为"）。
+        themes: 主题标签列表，企业命中任意一个即返回（OR 关系），如
+                ["智能制造", "数字化转型"]。支持子串匹配，不需要完全一致。
+        limit: 最多返回条数，默认 30，最大建议不超过 50（条数过多会稀释 LLM 注意力）。
+    """
+    items = search_overview(city=city, keyword=keyword, themes=themes or [], limit=limit)
+    return fmt_overview(items)
+
+
+@_pydantic_agent.tool
+async def get_enterprise_detail(
+    ctx: RunContext[UserDeps],
+    names: list[str] | None = None,
+    ids: list[int] | None = None,
+    fuzzy: bool = False,
+) -> str:
+    """【参访方案深度详情查询】获取一个或多个标杆企业的完整参访方案，包含：
+    参观体验、主题分享内容、研学核心价值、能赋能企业的知识点、能解决的业务管理痛点。
+
+    适用场景：
+    - 用户明确表示对某企业感兴趣，想深入了解其参访价值和内容
+    - 用户提出具体的业务痛点（如"我想解决研发效率低的问题"），需要找到最匹配的企业
+      并给出详细的痛点解决说明
+    - 用户询问"去华为能学到什么"、"这家企业适合我们吗"等深度咨询问题
+    - 在方案校准阶段，需要向用户展示参访的颗粒度和可实现内容
+
+    注意：本工具返回内容较多，请勿一次传入超过 3 个企业，以免上下文过载。
+    如需先筛选候选企业，请先调用 query_enterprises_overview。
+
+    Args:
+        names: 企业名列表，支持子串匹配（如 ["华为", "腾讯"]）。
+               fuzzy=False 时做精确子串匹配；fuzzy=True 时对未命中的名称自动
+               做编辑距离模糊匹配兜底（适合用户输入存在错别字的情况）。
+        ids: 企业编号列表，从 query_enterprises_overview 的返回结果中获取，精确命中。
+             与 names 可同时传入，结果取并集。
+        fuzzy: 是否对 names 启用模糊匹配，默认 False。用户输入明显有拼写问题时设为 True。
+    """
+    items = get_detail(names=names, ids=ids, fuzzy=fuzzy)
+    return fmt_detail(items)
 
 
 _WELCOME = (
