@@ -13,3 +13,4 @@ data/
 !app/data/
 !app/data/**
 media_index.json
+.worktrees/
