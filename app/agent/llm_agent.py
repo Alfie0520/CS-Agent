@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +17,7 @@ from app.config import get_settings
 from app.enterprise_data import fmt_detail, fmt_overview, get_detail, search_overview
 from app.media_index import get_overview, list_schemes, search
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
+from app.wechat_api import customer_message as _customer_message
 from app.wechat_api.client import wechat_get, wechat_post
 
 logger = logging.getLogger(__name__)
@@ -140,6 +140,29 @@ async def list_visit_schemes(ctx: RunContext[UserDeps], category: str = "") -> s
 
 
 @_pydantic_agent.tool
+async def push_image(ctx: RunContext[UserDeps], media_id: str) -> str:
+    """立即向用户发送一张图片。
+
+    查到参访方案或二维码的 media_id 后，调用此工具将图片直接发给用户。
+    多个方案时逐个调用，每次传一个 media_id，图片会按顺序依次发出。
+
+    业务逻辑：
+    - 先调查询工具（search_visit_scheme / get_wechat_qr_code）确认 media_id 存在
+    - 确认有结果后再调此工具发图，不要在未查询前假设有图片
+    - 多个方案都需要发送时，循环调用此工具，每张图单独调一次
+
+    Args:
+        media_id: 图片的 media_id，从 search_visit_scheme 或 get_wechat_qr_code 获取。
+    """
+    try:
+        await _customer_message.send_image(ctx.deps.openid, media_id)
+        return "图片已发送。"
+    except Exception as e:
+        logger.warning("push_image failed for %s: %s", ctx.deps.openid, e)
+        return f"图片发送失败：{e}"
+
+
+@_pydantic_agent.tool
 async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
     """立即向用户推送一条消息，无需等待当前回复完成。
 
@@ -157,8 +180,7 @@ async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
         content: 要立即推送给用户的消息内容。
     """
     try:
-        from app.wechat_api import customer_message
-        await customer_message.send_text(ctx.deps.openid, content)
+        await _customer_message.send_text(ctx.deps.openid, content)
         return "消息已推送。"
     except Exception as e:
         logger.warning("push_message failed for %s: %s", ctx.deps.openid, e)
@@ -170,34 +192,34 @@ async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
     """获取公司老板微信二维码的 media_id，用于发送给用户添加好友。
 
     当用户询问如何联系、加微信、咨询对接、商务合作、想和负责人沟通时调用。
-    获取后需在回复末尾写 IMAGE:media_id 以触发发送二维码图片。
+    获取到 media_id 后，调用 push_image(media_id) 将二维码图片发给用户。
     """
     settings = get_settings()
     media_id = (settings.wechat_qr_code_media_id or "").strip()
     if not media_id:
         return "微信二维码未配置，请联系管理员在 .env 中设置 WECHAT_QR_CODE_MEDIA_ID。"
-    return f"公司老板微信二维码 media_id={media_id}。回复时在末尾写 IMAGE:{media_id} 即可发送。"
+    return f"公司老板微信二维码 media_id={media_id}，请调用 push_image 将二维码发给用户。"
 
 
 @_pydantic_agent.tool
 async def search_visit_scheme(ctx: RunContext[UserDeps], query: str) -> str:
-    """按地理位置或企业名称搜索参访方案，返回匹配的 media_id 供发送图片。
+    """按地理位置或企业名称搜索参访方案图片，返回匹配结果的 media_id。
+
+    查到结果后，调用 push_image(media_id) 将图片发给用户。
+    多个匹配时，逐个调用 push_image，每张图单独发一次。
 
     Args:
         query: 搜索关键词，如「华为」「深圳」「河南」等。
-
-    Returns:
-        匹配结果，包含 media_id。若需发送图片，在回复末尾写 IMAGE:media_id。
     """
     items = search(query)
     if not items:
-        return f"未找到与「{query}」匹配的参访方案。"
+        return f"未找到与「{query}」匹配的参访方案图片。"
     if len(items) == 1:
         x = items[0]
-        return f"找到：{x.get('image_name', '')}（{x.get('category', '')}），media_id={x.get('media_id', '')}。回复时在末尾写 IMAGE:{x.get('media_id', '')} 即可发送。"
-    lines = [f"找到 {len(items)} 个匹配，请选一个发送："]
+        return f"找到 1 个：{x.get('image_name', '')}（{x.get('category', '')}），media_id={x.get('media_id', '')}，请调用 push_image 发送。"
+    lines = [f"找到 {len(items)} 个匹配，请逐个调用 push_image 发送："]
     for x in items:
-        lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）：IMAGE:{x.get('media_id', '')}")
+        lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）：media_id={x.get('media_id', '')}")
     return "\n".join(lines)
 
 
@@ -417,6 +439,8 @@ class LLMAgent(BaseAgent):
         settings = get_settings()
         self._agent = _pydantic_agent
         self._sessions = SessionStore(db_path=settings.session_db_path, ttl=settings.session_ttl)
+        strict_rules_path = Path(settings.prompt_strict_rules_path)
+        self._strict_rules = strict_rules_path.read_text(encoding="utf-8") if strict_rules_path.exists() else ""
 
     async def handle(self, message: IncomingMessage) -> AgentResponse:
         if message.msg_type == MsgType.EVENT:
@@ -446,11 +470,6 @@ class LLMAgent(BaseAgent):
             await self._sessions.clear(msg.from_user)
             return AgentResponse(replies=[ReplyContent(msg_type="text", text="对话历史已清空。")])
 
-        # 读取 strict_rules.md
-        settings = get_settings()
-        strict_rules_path = Path(settings.prompt_strict_rules_path)
-        strict_rules = strict_rules_path.read_text(encoding="utf-8") if strict_rules_path.exists() else ""
-
         # 组装本次发给 LLM 的最终 prompt
         # 如果是测试命令模式，跳过 strict_rules，并强制附加执行指令，同时清空历史上下文
         if user_input.startswith("/test"):
@@ -464,8 +483,8 @@ class LLMAgent(BaseAgent):
         else:
             # 正常模式：将 strict_rules 拼接在用户当前输入之前，强化近期注意力
             final_prompt = user_input
-            if strict_rules:
-                final_prompt = f"{strict_rules}\n\n[User Latest Message]:\n{user_input}"
+            if self._strict_rules:
+                final_prompt = f"{self._strict_rules}\n\n[User Latest Message]:\n{user_input}"
 
         try:
             result = await self._agent.run(
@@ -479,18 +498,7 @@ class LLMAgent(BaseAgent):
             logger.exception("LLM call failed for user %s", msg.from_user)
             reply_text = "抱歉，AI 助手暂时出现了问题，请稍后再试，或回复「转人工」联系人工客服。"
 
-        # 解析 IMAGE:media_id，取最后一个（LLM 选定要发送的）
         replies: list[ReplyContent] = []
-        image_media_id: str | None = None
-        matches = re.findall(r"IMAGE:(\S+)", reply_text)
-        if matches:
-            image_media_id = matches[-1].strip()
-            reply_text = re.sub(r"IMAGE:\S+", "", reply_text)  # 移除所有 IMAGE:xxx
-            reply_text = re.sub(r"\n{2,}", "\n", reply_text).strip()  # 合并多余空行
-
         if reply_text:
             replies.append(ReplyContent(msg_type="text", text=reply_text))
-        if image_media_id:
-            replies.append(ReplyContent(msg_type="image", media_id=image_media_id))
-
         return AgentResponse(replies=replies)
