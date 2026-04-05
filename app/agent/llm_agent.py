@@ -49,10 +49,13 @@ def _build_pydantic_agent() -> Agent[UserDeps, str]:
         ),
     )
     
-    # 读取 base_role.md 作为全局 System Prompt
+    # 合并 base_role + strict_rules 作为全局 System Prompt，避免 strict_rules 写入对话历史
     base_role_path = Path(settings.prompt_base_role_path)
-    system_prompt = base_role_path.read_text(encoding="utf-8") if base_role_path.exists() else ""
-    
+    strict_rules_path = Path(settings.prompt_strict_rules_path)
+    base_role = base_role_path.read_text(encoding="utf-8") if base_role_path.exists() else ""
+    strict_rules = strict_rules_path.read_text(encoding="utf-8") if strict_rules_path.exists() else ""
+    system_prompt = f"{base_role}\n\n---\n\n{strict_rules}" if strict_rules else base_role
+
     return Agent(
         model,
         system_prompt=system_prompt,
@@ -202,22 +205,28 @@ async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
 
 
 @_pydantic_agent.tool
-async def search_visit_scheme(ctx: RunContext[UserDeps], query: str) -> str:
-    """按地理位置或企业名称搜索参访方案图片，返回匹配结果的 media_id。
+async def search_visit_scheme(ctx: RunContext[UserDeps], query: str, category: str = "") -> str:
+    """按企业名称搜索参访方案图片，可指定地区分类精确过滤，返回匹配结果的 media_id。
 
     查到结果后，调用 push_image(media_id) 将图片发给用户。
-    多个匹配时，逐个调用 push_image，每张图单独发一次。
+    多个匹配时，根据对话上下文选择正确的图片，逐张调用 push_image 发送。
+
+    重要：当用户指定了地区（如"深圳的华为"、"河南的企业"），必须同时传入 category
+    参数，避免将同名但不同地区的企业方案发给用户。
 
     Args:
-        query: 搜索关键词，如「华为」「深圳」「河南」等。
+        query: 企业名称关键词，如「华为」「比亚迪」「胖东来」。
+        category: 地区过滤关键词，子串匹配，如「深圳」「河南」「浙江」。
+                  用户明确提到地区时必须填写；不确定时留空。
     """
-    items = search(query)
+    items = search(query, category=category)
     if not items:
-        return f"未找到与「{query}」匹配的参访方案图片。"
+        hint = f"（地区「{category}」）" if category else ""
+        return f"未找到与「{query}」{hint}匹配的参访方案图片。"
     if len(items) == 1:
         x = items[0]
         return f"找到 1 个：{x.get('image_name', '')}（{x.get('category', '')}），media_id={x.get('media_id', '')}，请调用 push_image 发送。"
-    lines = [f"找到 {len(items)} 个匹配，请逐个调用 push_image 发送："]
+    lines = [f"找到 {len(items)} 个匹配，请根据对话上下文选择正确的方案后调用 push_image 发送："]
     for x in items:
         lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）：media_id={x.get('media_id', '')}")
     return "\n".join(lines)
@@ -439,8 +448,6 @@ class LLMAgent(BaseAgent):
         settings = get_settings()
         self._agent = _pydantic_agent
         self._sessions = SessionStore(db_path=settings.session_db_path, ttl=settings.session_ttl)
-        strict_rules_path = Path(settings.prompt_strict_rules_path)
-        self._strict_rules = strict_rules_path.read_text(encoding="utf-8") if strict_rules_path.exists() else ""
 
     async def handle(self, message: IncomingMessage) -> AgentResponse:
         if message.msg_type == MsgType.EVENT:
@@ -481,10 +488,7 @@ class LLMAgent(BaseAgent):
                 f"必须且只能直接执行以下用户指令，不要反问，不要引导：\n{user_input}"
             )
         else:
-            # 正常模式：将 strict_rules 拼接在用户当前输入之前，强化近期注意力
             final_prompt = user_input
-            if self._strict_rules:
-                final_prompt = f"{self._strict_rules}\n\n[User Latest Message]:\n{user_input}"
 
         try:
             result = await self._agent.run(

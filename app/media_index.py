@@ -69,21 +69,30 @@ def list_schemes(category: str | None = None) -> list[dict[str, str]]:
     return items
 
 
-def search(keyword: str) -> list[dict[str, str]]:
-    """按关键词模糊搜索（匹配分类或图片名称）。
+def search(keyword: str, category: str = "") -> list[dict[str, str]]:
+    """按关键词模糊搜索（匹配图片名称），可选地区分类过滤。
+
+    Args:
+        keyword: 搜索关键词，匹配 image_name 字段（企业名）。
+        category: 地区过滤，子串匹配 category 字段（如"河南"可匹配"09河南"）。
+                  为空则不限地区。
 
     Returns:
         [{"media_id", "image_name", "category"}, ...]
     """
     items = _load()
     kw = keyword.strip()
-    if not kw:
+    cat = category.strip()
+
+    if not kw and not cat:
         return []
-    return [
-        x
-        for x in items
-        if kw in (x.get("category") or "") or kw in (x.get("image_name") or "")
-    ]
+
+    result = items
+    if kw:
+        result = [x for x in result if kw in (x.get("image_name") or "")]
+    if cat:
+        result = [x for x in result if cat in (x.get("category") or "")]
+    return result
 
 
 def exists(category: str, image_name: str) -> bool:
