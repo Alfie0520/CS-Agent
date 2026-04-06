@@ -194,7 +194,10 @@ async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
 async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
     """获取公司老板微信二维码的 media_id，用于发送给用户添加好友。
 
-    当用户询问如何联系、加微信、咨询对接、商务合作、想和负责人沟通时调用。
+    调用时机：
+    1. 当用户询问如何联系、加微信、咨询对接、商务合作、想和负责人沟通时。
+    2. 当用户询问具体报价，或即将交付成单的转化时机时（用于承接转化，避免 AI 幻觉报价）。
+    
     获取到 media_id 后，调用 push_image(media_id) 将二维码图片发给用户。
     """
     settings = get_settings()
