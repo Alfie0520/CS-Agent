@@ -294,9 +294,11 @@ function renderMenuList(data) {
       subs.forEach((sub, j) => {
         const isSubActive = editPath && editPath[0] === i && editPath[1] === j;
         html += '<div class="sub-item' + (isSubActive ? ' active' : '') + '" onclick="editSub(' + i + ',' + j + ')">';
+        html += '<button class="btn btn-xs btn-outline" style="flex-shrink:0;" onclick="event.stopPropagation();moveSubUp(' + i + ',' + j + ')">↑</button>';
+        html += '<button class="btn btn-xs btn-outline" style="flex-shrink:0;" onclick="event.stopPropagation();moveSubDown(' + i + ',' + j + ')">↓</button>';
         html += '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + sub.name + '</span>';
         html += '<span class="badge badge-gray" style="flex-shrink:0;">' + typeLabel(sub.type) + '</span>';
-        html += '<button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteSub(' + i + ',' + j + ')">×</button>';
+        html += '<button class="btn btn-xs btn-danger" style="flex-shrink:0;" onclick="event.stopPropagation();deleteSub(' + i + ',' + j + ')">×</button>';
         html += '</div>';
       });
       html += '</div>';
@@ -472,6 +474,27 @@ async function saveButton() {
   } else {
     showMsg(document.getElementById('editMsg'), '❌ 保存失败：' + result.errmsg, 'error');
   }
+}
+
+
+async function moveSubUp(parentIdx, subIdx) {
+  if (!currentMenu || subIdx === 0) return;
+  const buttons = JSON.parse(JSON.stringify(currentMenu.menu.button));
+  [buttons[parentIdx].sub_button[subIdx - 1], buttons[parentIdx].sub_button[subIdx]] =
+    [buttons[parentIdx].sub_button[subIdx], buttons[parentIdx].sub_button[subIdx - 1]];
+  const result = await api(new URLSearchParams({ operation: 'create', menu_data: JSON.stringify({ button: buttons }) }));
+  if (result.errcode === 0) await refreshMenu();
+}
+
+async function moveSubDown(parentIdx, subIdx) {
+  if (!currentMenu) return;
+  const subs = currentMenu.menu.button[parentIdx].sub_button;
+  if (subIdx >= subs.length - 1) return;
+  const buttons = JSON.parse(JSON.stringify(currentMenu.menu.button));
+  [buttons[parentIdx].sub_button[subIdx], buttons[parentIdx].sub_button[subIdx + 1]] =
+    [buttons[parentIdx].sub_button[subIdx + 1], buttons[parentIdx].sub_button[subIdx]];
+  const result = await api(new URLSearchParams({ operation: 'create', menu_data: JSON.stringify({ button: buttons }) }));
+  if (result.errcode === 0) await refreshMenu();
 }
 
 async function refreshMenu() {
