@@ -1,0 +1,324 @@
+# 自定义菜单介绍
+
+## 1、概述
+
+自定义菜单能够帮助服务号丰富界面，让用户更好更快地理解服务号的功能。
+
+## 2、具体功能及服务端接口
+
+| 接口名称 | 请求路径 | 描述 |
+| --- | --- | --- |
+| 创建自定义菜单 | `/cgi-bin/menu/create` | 该接口用于创建公众号/服务号的自定义菜单 |
+| 查询自定义菜单信息 | `/cgi-bin/get_current_selfmenu_info` | 本接口提供公众号当前使用的自定义菜单的配置。如果公众号是通过 API 调用设置的菜单，则返回菜单的开发配置；如果公众号是在公众平台官网通过网站功能发布菜单，则返回官网配置 |
+| 获取自定义菜单配置 | `/cgi-bin/menu/get` | 使用接口创建自定义菜单后，开发者还可使用接口查询自定义菜单的结构 |
+| 删除自定义菜单 | `/cgi-bin/menu/delete` | 删除当前使用的自定义菜单 |
+| 创建个性化菜单 | `/cgi-bin/menu/addconditional` | 为了帮助公众号实现灵活的业务运营，微信公众平台新增了个性化菜单接口，开发者可以通过该接口，让公众号的不同用户群体看到不一样的自定义菜单 |
+| 删除个性化菜单 | `/cgi-bin/menu/delconditional` | 删除指定个性化菜单 |
+| 测试个性化菜单匹配结果 | `/cgi-bin/menu/trymatch` | 测试用户看到的菜单配置 |
+
+## 3、自定义菜单的事件推送
+
+用户点击自定义菜单后，微信会把点击事件推送给开发者。请注意，点击菜单弹出子菜单，不会产生上报。
+
+> 第 3.3 到 3.8 的所有事件，仅支持微信 iPhone 5.4.1 以上版本和 Android 5.4 以上版本的微信用户。旧版本微信用户点击后将没有回应，开发者也不能正常接收到事件推送。
+
+---
+
+### 3.1 点击菜单拉取消息时的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[CLICK]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，CLICK |
+| EventKey | 事件 KEY 值，与自定义菜单接口中 KEY 值对应 |
+
+---
+
+### 3.2 点击菜单跳转链接时的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[VIEW]]></Event>
+    <EventKey><![CDATA[www.qq.com]]></EventKey>
+    <MenuId><![CDATA[xxxxxx]]></MenuId>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，VIEW |
+| EventKey | 事件 KEY 值，设置的跳转 URL |
+| MenuId | 菜单 ID，如果是个性化菜单，则可以通过这个字段知道是哪个规则的菜单被点击了 |
+
+---
+
+### 3.3 scancode_push：扫码推事件的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[scancode_push]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+    <ScanCodeInfo>
+        <ScanType><![CDATA[qrcode]]></ScanType>
+        <ScanResult><![CDATA[1]]></ScanResult>
+    </ScanCodeInfo>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，scancode_push |
+| EventKey | 事件 KEY 值，由开发者在创建菜单时设定 |
+| ScanCodeInfo | 扫描信息 |
+| ScanType | 扫描类型，一般是 qrcode |
+| ScanResult | 扫描结果，即二维码对应的字符串信息 |
+
+---
+
+### 3.4 scancode_waitmsg：扫码推事件且弹出"消息接收中"提示框的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[scancode_waitmsg]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+    <ScanCodeInfo>
+        <ScanType><![CDATA[qrcode]]></ScanType>
+        <ScanResult><![CDATA[2]]></ScanResult>
+    </ScanCodeInfo>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，scancode_waitmsg |
+| EventKey | 事件 KEY 值，由开发者在创建菜单时设定 |
+| ScanCodeInfo | 扫描信息 |
+| ScanType | 扫描类型，一般是 qrcode |
+| ScanResult | 扫描结果，即二维码对应的字符串信息 |
+
+---
+
+### 3.5 pic_sysphoto：弹出系统拍照发图的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[pic_sysphoto]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+    <SendPicsInfo>
+        <Count>1</Count>
+        <PicList>
+            <item>
+                <PicMd5Sum><![CDATA[md5]]></PicMd5Sum>
+            </item>
+        </PicList>
+    </SendPicsInfo>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，pic_sysphoto |
+| EventKey | 事件 KEY 值，由开发者在创建菜单时设定 |
+| SendPicsInfo | 发送的图片信息 |
+| Count | 发送的图片数量 |
+| PicList | 图片列表 |
+| PicMd5Sum | 图片的 MD5 值，开发者若需要可用于验证接收到图片 |
+
+---
+
+### 3.6 pic_photo_or_album：弹出拍照或者相册发图的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[pic_photo_or_album]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+    <SendPicsInfo>
+        <Count>1</Count>
+        <PicList>
+            <item>
+                <PicMd5Sum><![CDATA[md5]]></PicMd5Sum>
+            </item>
+        </PicList>
+    </SendPicsInfo>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，pic_photo_or_album |
+| EventKey | 事件 KEY 值，由开发者在创建菜单时设定 |
+| SendPicsInfo | 发送的图片信息 |
+| Count | 发送的图片数量 |
+| PicList | 图片列表 |
+| PicMd5Sum | 图片的 MD5 值，开发者若需要可用于验证接收到图片 |
+
+---
+
+### 3.7 pic_weixin：弹出微信相册发图器的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[pic_weixin]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+    <SendPicsInfo>
+        <Count>1</Count>
+        <PicList>
+            <item>
+                <PicMd5Sum><![CDATA[md5]]></PicMd5Sum>
+            </item>
+        </PicList>
+    </SendPicsInfo>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，pic_weixin |
+| EventKey | 事件 KEY 值，由开发者在创建菜单时设定 |
+| SendPicsInfo | 发送的图片信息 |
+| Count | 发送的图片数量 |
+| PicList | 图片列表 |
+| PicMd5Sum | 图片的 MD5 值，开发者若需要可用于验证接收到图片 |
+
+---
+
+### 3.8 location_select：弹出地理位置选择器的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[location_select]]></Event>
+    <EventKey><![CDATA[EVENTKEY]]></EventKey>
+    <SendLocationInfo>
+        <Location_X><![CDATA[23]]></Location_X>
+        <Location_Y><![CDATA[113]]></Location_Y>
+        <Scale><![CDATA[15]]></Scale>
+        <Label><![CDATA[位置信息]]></Label>
+        <Poiname><![CDATA[]]></Poiname>
+    </SendLocationInfo>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，location_select |
+| EventKey | 事件 KEY 值，由开发者在创建菜单时设定 |
+| SendLocationInfo | 发送的位置信息 |
+| Location_X | X 坐标信息 |
+| Location_Y | Y 坐标信息 |
+| Scale | 精度，可理解为比例尺，越精细则 scale 越高 |
+| Label | 地理位置的字符串信息 |
+| Poiname | 朋友圈 POI 的名字，可能为空 |
+
+---
+
+### 3.9 点击菜单跳转小程序的事件推送
+
+推送 XML 数据包示例：
+
+```xml
+<xml>
+    <ToUserName><![CDATA[ToUser]]></ToUserName>
+    <FromUserName><![CDATA[FromUser]]></FromUserName>
+    <CreateTime>123456789</CreateTime>
+    <MsgType><![CDATA[event]]></MsgType>
+    <Event><![CDATA[view_miniprogram]]></Event>
+    <EventKey><![CDATA[pages/index/index]]></EventKey>
+    <MenuId><![CDATA[xxxxxx]]></MenuId>
+</xml>
+```
+
+| 参数 | 描述 |
+| --- | --- |
+| ToUserName | 开发者微信号 |
+| FromUserName | 发送方账号（一个 OpenID） |
+| CreateTime | 消息创建时间（整型） |
+| MsgType | 消息类型，event |
+| Event | 事件类型，view_miniprogram |
+| EventKey | 事件 KEY 值，跳转的小程序路径 |
+| MenuId | 菜单 ID，如果是个性化菜单，则可以通过这个字段知道是哪个规则的菜单被点击了 |

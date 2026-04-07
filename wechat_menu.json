@@ -1,0 +1,89 @@
+{
+  "button": [
+    {
+      "name": "研学产品",
+      "sub_button": [
+        {
+          "type": "view",
+          "name": "产品手册",
+          "url": "https://book.yunzhan365.com/jrwts/elkf/mobile/index.html"
+        },
+        {
+          "type": "view",
+          "name": "游学橱窗",
+          "url": "https://book.yunzhan365.com/bookcase/uhkq/index.html"
+        },
+        {
+          "type": "view",
+          "name": "现场实拍",
+          "url": "https://book.yunzhan365.com/bookcase/sbtpj/index.html"
+        },
+        {
+          "type": "view",
+          "name": "免费专区",
+          "url": "https://book.yunzhan365.com/jrwts/ekia/mobile/index.html"
+        }
+      ]
+    },
+    {
+      "name": "大厂师资",
+      "sub_button": [
+        {
+          "type": "view",
+          "name": "学术大佬",
+          "url": "https://book.yunzhan365.com/bookcase/pvql/index.html"
+        },
+        {
+          "type": "view",
+          "name": "经济专家",
+          "url": "https://book.yunzhan365.com/bookcase/zflt/index.html"
+        },
+        {
+          "type": "view",
+          "name": "政界大咖",
+          "url": "https://book.yunzhan365.com/bookcase/xtknz/index.html"
+        },
+        {
+          "type": "view",
+          "name": "大厂高管",
+          "url": "https://book.yunzhan365.com/bookcase/muvo/index.html"
+        },
+        {
+          "type": "view",
+          "name": "海外名流",
+          "url": "https://book.yunzhan365.com/bookcase/mqcay/index.html"
+        }
+      ]
+    },
+    {
+      "name": "关于我们",
+      "sub_button": [
+        {
+          "type": "view",
+          "name": "智能客服",
+          "url": "https://yuanqi.tencent.com/webim/#/chat/BzGjYS?appid=1988276549004457600&experience=true"
+        },
+        {
+          "type": "view",
+          "name": "案例展示",
+          "url": "https://mp.weixin.qq.com/s/KizQBx5fjz0ic5w3hG4DUA"
+        },
+        {
+          "type": "view",
+          "name": "交付保障",
+          "url": "https://mp.weixin.qq.com/s/tfUn0eJcWNNpiuJ2EqC7KQ"
+        },
+        {
+          "type": "view",
+          "name": "感恩回馈",
+          "url": "https://mp.weixin.qq.com/s/2NmgCTEZkvdqgrN-BdEPYw"
+        },
+        {
+          "type": "view",
+          "name": "联系我们",
+          "url": "https://mp.weixin.qq.com/s/JIAktA7fzRfANxlcp_GCEg"
+        }
+      ]
+    }
+  ]
+}
