@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     # 微信自定义菜单配置文件路径，agent 启动时自动创建该菜单
     wechat_menu_file_path: str = "wechat_menu.json"
+    # 菜单管理 API 访问密钥
+    menu_api_key: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
