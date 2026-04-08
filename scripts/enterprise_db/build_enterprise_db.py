@@ -1,7 +1,9 @@
-"""将 docs/业务知识_raw/2026游学资源表.xlsx 转换为 app/data/enterprises.json。
+#!/usr/bin/env python3
+"""将 data/2026游学资源表.xlsx 转换为 app/data/enterprises.json。
 
-运行方式（在项目根目录下）：
-    python scripts/build_enterprise_db.py
+用法：
+    cd /path/to/CS-Agent
+    python scripts/enterprise_db/build_enterprise_db.py
 """
 
 from __future__ import annotations
@@ -17,25 +19,12 @@ except ImportError:
     print("请先安装 openpyxl：pip install openpyxl")
     sys.exit(1)
 
-EXCEL_PATH = Path("docs/业务知识_raw/2026游学资源表.xlsx")
-OUTPUT_PATH = Path("app/data/enterprises.json")
-
-COL_MAP = {
-    0: "id",
-    1: "category",
-    2: "city",
-    3: "name",
-    4: "themes_raw",
-    5: "visit_experience",
-    6: "sharing_topics",
-    7: "core_value",
-    8: "knowledge_points",
-    9: "pain_points",
-}
+SCRIPT_DIR = Path(__file__).resolve().parent
+EXCEL_PATH = SCRIPT_DIR / "data" / "2026游学资源表.xlsx"
+OUTPUT_PATH = Path(__file__).resolve().parent.parent.parent / "app" / "data" / "enterprises.json"
 
 
 def parse_themes(raw: str | None) -> list[str]:
-    """将「管理哲学、企业文化、人力资源」拆成标签列表，去重保序。"""
     if not raw:
         return []
     tags = re.split(r"[、，,\s]+", str(raw).strip())
@@ -65,12 +54,11 @@ def main() -> None:
     ws = wb["标杆企业"]
     all_rows = list(ws.iter_rows(values_only=True))
 
-    # 第1行是颜色备注，第2行是表头，从第3行开始是数据
     data_rows = [r for r in all_rows[2:] if any(c for c in r)]
 
     enterprises = []
     for row in data_rows:
-        if not row[0] or not row[3]:  # 编号或企业名为空则跳过
+        if not row[0] or not row[3]:
             continue
         themes = parse_themes(clean(row[4]))
         entry = {
