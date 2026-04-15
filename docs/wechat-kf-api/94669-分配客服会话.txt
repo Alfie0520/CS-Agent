@@ -1,0 +1,101 @@
+来源（企业微信开发者文档，微信客服「分配客服会话」章节；站内与第三方版目录均有对应 path）：
+  https://developer.work.weixin.qq.com/document/path/94669
+  https://developer.work.weixin.qq.com/document/path/94698
+说明：kf.weixin.qq.com 文档站导航未单独给出该页的 path/94669 正文入口时，以企业微信开发者中心上述页面为准。两 path 章节内容在归档时一致，此处合并。
+
+最后更新（官网标注）：2023/11/30
+
+================================================================================
+概述
+================================================================================
+
+从微信用户发起咨询到会话结束，会话会经历若干状态。企业或第三方可使用 API 获取和变更会话状态，以实现分配管理。
+
+状态表：
+  ID 0：未处理 — 新会话接入（客户发消息咨询）。可选：API 自动回复；放入待接入池；指定接待人员（须处于「正在接待」）
+  ID 1：由智能助手接待 — 可 API 回复；可转入待接入池或指定接待人员
+  ID 2：待接入池排队中 — 可转为指定人员接待
+  ID 3：由人工接待 — 可转接或结束会话
+  ID 4：已结束/未开始 — 会话结束或未开始（客户进入会话但尚未上行消息）。不允许通过 API 变更状态；客户发消息后变「未处理」。接待人员在已结束会话中成功发消息后，会话状态变为「由人工接待」，并可能产生会话状态变更回调事件（官方描述：4-重新接入已结束/已转接会话）
+
+注：一个微信用户向一个客服账号发起咨询后，在 48h 内，或主动结束会话前（含接待人员手动结束或企业通过 API 结束会话），都算一次会话。
+
+================================================================================
+获取会话状态
+================================================================================
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/get?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+	"open_kfid": "wkxxxxxxxxxxxxxxxxxx",
+	"external_userid": "wmxxxxxxxxxxxxxxxxxx"
+}
+
+参数说明：
+  access_token       必填  string  调用接口凭证
+  open_kfid          必填  string  客服账号 ID
+  external_userid    必填  string  微信客户的 external_userid
+
+权限说明（应用类型与权限要求，官方原文要点）：
+  自建应用：配置到「微信客服 - 可调用接口的应用」中
+  第三方应用：具有「微信客服->管理账号、分配会话和收发消息」权限
+  代开发自建应用：具有「微信客服->管理账号、分配会话和收发消息」权限
+
+补充约束（官方要点）：
+  - 只能通过 API 管理企业指定的客服账号：管理后台「微信客服-通过 API 管理微信客服账号」
+  - 操作的客服账号对应接待人员应在应用可见范围内
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+	"service_state": 3,
+	"servicer_userid": "zhangsan"
+}
+
+返回字段说明：
+  errcode           int     返回码
+  errmsg            string  错误码描述
+  service_state     int     当前会话状态（见概述表格）
+  servicer_userid   string  接待人员 userid；第三方为密文 userid（open_userid）；仅当 state=3 时有效
+
+================================================================================
+变更会话状态
+================================================================================
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/service_state/trans?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+	"open_kfid": "wkxxxxxxxxxxxxxxxxxx",
+	"external_userid": "wmxxxxxxxxxxxxxxxxxx",
+	"service_state": 3,
+	"servicer_userid": "zhangsan"
+}
+
+参数说明：
+  access_token       必填  string  调用接口凭证
+  open_kfid          必填  string  客服账号 ID
+  external_userid    必填  string  微信客户的 external_userid
+  service_state      必填  int     变更目标状态（允许的状态迁移以官方流程图/表格为准）
+  servicer_userid    否    string  接待人员 userid（第三方填 open_userid）。当 state=3 时要求必填，且接待人员须处于「正在接待」。接待人员须已在企业微信激活使用，否则可能返回 95014（以官方错误码为准）
+
+权限说明：同「获取会话状态」。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+	"msg_code": "MSG_CODE"
+}
+
+返回字段说明：
+  errcode    int     返回码
+  errmsg     string  错误码描述
+  msg_code   string  用于发送事件响应消息的 code：
+            将会话初次变更为 service_state 为 2 和 3 时，返回回复语 code；
+            service_state 为 4 时，返回结束语 code。
+            可用该 code 调用发送事件响应消息接口（见 95123-发送客服欢迎语.txt / 官方 send_msg_on_event）给客户发送事件响应消息。

@@ -1,0 +1,47 @@
+来源：https://kf.weixin.qq.com/api/doc/path/94746
+标题：获取客服账号列表（微信客服 API）
+
+================================================================================
+获取客服账号列表
+================================================================================
+
+获取客服账号列表，包括所有的客服账号的客服 ID、名称和头像。
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/account/list?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+	"offset": 0,
+    "limit": 100
+}
+
+当客服较多时，需要使用参数 offset 及 limit 分页获取。注意 offset 是以 0 为起点。当获取到的 account_list 中的账号数量小于指定的 limit 时，表示已经没有更多的数据，此时应终止获取。
+
+参数说明：
+  access_token  必填  string   调用接口凭证
+  offset        否    uint32  分页偏移量，默认为 0
+  limit         否    uint32  分页预期请求的数据量，默认为 100，取值范围 1 ~ 100
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+	"account_list": [
+        {
+            "open_kfid": "wkAJ2GCAAASSm4_FhToWMFea0xAFfd3Q",
+            "name": "客服账号名称",
+            "avatar": "https://wework.qpic.cn/wwhead/duc2TvpEgSSjibPZlNR6chpx9W3dtd9Ogp8XEmSNKGa6uufMWn2239HUPuwIFoYYZ7Ph580FPvo8/0"
+        }
+    ]
+}
+
+返回字段说明：
+  errcode               int32    返回码
+  errmsg                string   错误码描述
+  account_list          obj[]    账号信息列表
+  account_list.open_kfid   string   客服账号 ID
+  account_list.name        string   客服账号名称
+  account_list.avatar    string   客服头像 URL

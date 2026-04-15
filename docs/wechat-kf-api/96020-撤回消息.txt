@@ -1,0 +1,34 @@
+来源：https://kf.weixin.qq.com/api/doc/path/96020
+标题：撤回消息（微信客服 API）
+
+================================================================================
+撤回消息
+================================================================================
+
+支持撤回 2 分钟内通过「发送消息」接口发送的微信客服消息。撤回后的消息仍占用 48 小时内 5 条消息的额度。
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/recall_msg?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+	"msgid": "MSGID",
+	"open_kfid": "KFID"
+}
+
+参数说明：
+  access_token  必填  string  调用接口凭证
+  msgid         必填  string  需要撤回的消息 msgid
+  open_kfid     必填  string  客服账号 ID
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok"
+}
+
+返回字段说明：
+  errcode   int32   返回码
+  errmsg    string  错误码描述

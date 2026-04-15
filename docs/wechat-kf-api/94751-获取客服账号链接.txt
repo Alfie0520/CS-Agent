@@ -1,0 +1,41 @@
+来源：https://kf.weixin.qq.com/api/doc/path/94751
+标题：获取客服账号链接（微信客服 API）
+
+================================================================================
+获取客服账号链接
+================================================================================
+
+企业可通过此接口获取带有不同参数的客服链接，不同客服账号对应不同的客服链接。获取后，企业可将链接嵌入到网页等场景中，微信用户点击链接即可向对应的客服账号发起咨询。企业可依据参数来识别用户的咨询来源等。
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/add_contact_way?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+	"open_kfid": "OPEN_KFID",
+    "scene": "12345"
+}
+
+参数说明：
+  access_token  必填  string  调用接口凭证
+  open_kfid     必填  string  客服账号 ID
+  scene         否    string  场景值，由开发者自定义。不多于 32 字节；取值范围（正则）：[0-9a-zA-Z_-]*
+
+补充说明（来自官方文档要点）：
+  1. 若 scene 非空，返回的客服链接开发者可拼接 scene_param=SCENE_PARAM 使用；用户进入会话事件会将 SCENE_PARAM 原样返回。其中 SCENE_PARAM 需要 urlencode，且 encode 前的原始长度不能超过 128 字节。
+     示例（结构说明）：在官方返回的 url 后拼接 &scene_param=...（具体以官方示例为准）。
+  2. 返回的客服链接，不能修改或复制参数到其他链接使用；否则进入会话事件参数校验可能失败，导致无法回调。
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+返回结果示例（JSON）：
+{
+   "errcode": 0,
+   "errmsg": "ok",
+   "url":"https://work.weixin.qq.com/kf/kfcbf8f8d07ac7215f?enc_scene=ENCGFSDF567DF"
+}
+
+返回字段说明：
+  errcode   int32   返回码
+  errmsg    string  对返回码的文本描述内容
+  url       string  客服链接；开发者可将该链接嵌入 H5；也可根据 url 自行生成二维码图片

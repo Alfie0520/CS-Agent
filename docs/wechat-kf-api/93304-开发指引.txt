@@ -80,3 +80,22 @@ access_token
   2. access_token 的有效期通过返回的 expires_in 来传达，正常情况下为 7200 秒（2 小时），有效期内重复获取返回相同结果，过期后获取会返回新的 access_token。
   3. access_token 至少保留 512 字节的存储空间。
   4. 微信客服可能会出于运营需要，提前使 access_token 失效，开发者应实现 access_token 失效时重新获取的逻辑。
+
+回调 URL 接入（GET 校验与 POST 收包）
+---------------------------
+配置回调 URL 时，微信侧会发起两类请求（与企业微信回调机制一致）：
+
+1）GET（验证 URL 有效性）
+  - URL 上通常携带：msg_signature、timestamp、nonce、echostr（echostr 需按 URL 解码后再参与验签/解密）。
+  - 开发者需按「加解密方案说明」对 echostr 验签并解密，将得到的明文字符串**原样**作为 HTTP 响应体返回（常见为 text/plain），用于通过配置校验。
+
+2）POST（接收推送）
+  - Body 一般为加密后的 XML（含 Encrypt 节点等），需验签、解密后得到明文 XML，再解析业务事件。
+  - 微信客服「有新消息」类回调解密后的结构见本目录 94745-接收消息和事件.txt（如 Event=kf_msg_or_event）。
+
+ReceiveId（加解密库参数）
+  - 微信客服 / 企业内部回调场景：ReceiveId 使用企业 corpid（与企业微信加解密文档一致；若官方后续调整以官网为准）。
+
+离线加解密全文
+  - 见本目录 90968-附录-回调加解密方案说明.txt（摘录自企业微信开发者文档，算法与企业微信一致）。
+  - 官方完整网页：https://developer.work.weixin.qq.com/document/path/90968
