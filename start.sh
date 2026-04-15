@@ -12,7 +12,19 @@ OLD_PIDS=$(lsof -t -i :"$APP_PORT" 2>/dev/null || true)
 if [ -n "$OLD_PIDS" ]; then
     echo "Stopping old process on port $APP_PORT (PID: $OLD_PIDS)..."
     kill $OLD_PIDS 2>/dev/null || true
-    sleep 1
+    # 等待端口完全释放（最多 5 秒）
+    for i in $(seq 1 5); do
+        if ! lsof -i :"$APP_PORT" > /dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+    # 如果还没释放，强制杀
+    if lsof -t -i :"$APP_PORT" > /dev/null 2>&1; then
+        echo "Force killing..."
+        kill -9 $(lsof -t -i :"$APP_PORT") 2>/dev/null || true
+        sleep 1
+    fi
 fi
 
 # 激活虚拟环境（如果存在）
