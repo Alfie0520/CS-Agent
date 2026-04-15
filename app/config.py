@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # 菜单管理 API 访问密钥
     menu_api_key: str = ""
 
+    # ---- 微信客服 (KF) 渠道 ----
+    kf_enabled: bool = False
+    kf_corp_id: str = ""
+    kf_secret: str = ""
+    kf_token: str = ""
+    kf_encoding_aes_key: str = ""
+    kf_api_base_url: str = "https://qyapi.weixin.qq.com"
+    kf_open_kfid: str = ""  # 客服账号 ID
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
