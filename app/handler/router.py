@@ -7,14 +7,16 @@ import time
 from collections import OrderedDict
 
 from app.agent.llm_agent import LLMAgent
-from app.core.xml_parser import build_transfer_kf_xml, parse_xml
+from app.channel.official_account import OfficialAccountAdapter
+from app.core.xml_parser import parse_xml
 from app.handler.event_handler import handle_event
 from app.handler.message_handler import handle_message
 from app.models.message import MsgType
 
 logger = logging.getLogger(__name__)
 
-_agent = LLMAgent()
+_channel = OfficialAccountAdapter()
+_agent = LLMAgent(channel=_channel)
 
 _seen_msg_ids: OrderedDict[str, float] = OrderedDict()
 _DEDUP_TTL = 30  # 30 秒内同一 MsgId 视为重复
@@ -64,6 +66,6 @@ async def dispatch(raw_xml: bytes) -> None:
     )
 
     if msg.msg_type == MsgType.EVENT:
-        await handle_event(msg, _agent)
+        await handle_event(msg, _agent, _channel)
     else:
-        await handle_message(msg, _agent)
+        await handle_message(msg, _agent, _channel)

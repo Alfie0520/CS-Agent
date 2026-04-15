@@ -1,4 +1,4 @@
-"""按 openid 管理多轮对话历史，SQLite 持久化存储。"""
+"""按 user_id 管理多轮对话历史，SQLite 持久化存储。"""
 
 from __future__ import annotations
 
@@ -18,8 +18,9 @@ _ta: TypeAdapter[list[ModelMessage]] = TypeAdapter(list[ModelMessage])
 
 
 class SessionStore:
-    """存储每个用户（openid）的 pydantic-ai 消息历史，持久化到 SQLite。
+    """存储每个用户的 pydantic-ai 消息历史，持久化到 SQLite。
 
+    支持多渠道：服务号 openid / 微信客服 external_userid 均可作为 user_id。
     - ttl=0 表示永不过期；ttl>0 表示超过该秒数未活跃则清空上下文
     """
 
@@ -42,11 +43,11 @@ class SessionStore:
 
     # ---------- 同步实现（在线程池中执行）----------
 
-    def _get_sync(self, openid: str) -> list[Any]:
+    def _get_sync(self, user_id: str) -> list[Any]:
         with sqlite3.connect(self._db_path) as conn:
             row = conn.execute(
                 "SELECT messages, updated_at FROM sessions WHERE openid = ?",
-                (openid,),
+                (user_id,),
             ).fetchone()
         if row is None:
             return []
@@ -56,10 +57,10 @@ class SessionStore:
         try:
             return _ta.validate_json(messages_bytes)
         except Exception:
-            logger.warning("Failed to deserialize session for %s, resetting", openid)
+            logger.warning("Failed to deserialize session for %s, resetting", user_id)
             return []
 
-    def _set_sync(self, openid: str, messages: list[Any]) -> None:
+    def _set_sync(self, user_id: str, messages: list[Any]) -> None:
         messages_bytes = _ta.dump_json(messages)
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
@@ -69,22 +70,22 @@ class SessionStore:
                     messages   = excluded.messages,
                     updated_at = excluded.updated_at
                 """,
-                (openid, messages_bytes, time.time()),
+                (user_id, messages_bytes, time.time()),
             )
             conn.commit()
 
-    def _clear_sync(self, openid: str) -> None:
+    def _clear_sync(self, user_id: str) -> None:
         with sqlite3.connect(self._db_path) as conn:
-            conn.execute("DELETE FROM sessions WHERE openid = ?", (openid,))
+            conn.execute("DELETE FROM sessions WHERE openid = ?", (user_id,))
             conn.commit()
 
     # ---------- 异步接口 ----------
 
-    async def get(self, openid: str) -> list[Any]:
-        return await asyncio.to_thread(self._get_sync, openid)
+    async def get(self, user_id: str) -> list[Any]:
+        return await asyncio.to_thread(self._get_sync, user_id)
 
-    async def set(self, openid: str, messages: list[Any]) -> None:
-        await asyncio.to_thread(self._set_sync, openid, messages)
+    async def set(self, user_id: str, messages: list[Any]) -> None:
+        await asyncio.to_thread(self._set_sync, user_id, messages)
 
-    async def clear(self, openid: str) -> None:
-        await asyncio.to_thread(self._clear_sync, openid)
+    async def clear(self, user_id: str) -> None:
+        await asyncio.to_thread(self._clear_sync, user_id)
