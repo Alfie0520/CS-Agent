@@ -28,14 +28,22 @@ python3 -m pip install -q -r requirements.txt
 # 后台启动服务
 echo "Starting CS-Agent on port $APP_PORT..."
 nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port "$APP_PORT" > nohup.out 2>&1 &
-sleep 2
+APP_PID=$!
 
-# 检查是否启动成功
-if lsof -i :"$APP_PORT" > /dev/null 2>&1; then
-    echo "CS-Agent started successfully (PID: $!, port: $APP_PORT)"
-    echo "Logs: tail -f $(pwd)/nohup.out"
-else
-    echo "Failed to start! Check logs:"
-    tail -20 nohup.out
-    exit 1
-fi
+# 等待启动（最多 10 秒）
+for i in $(seq 1 10); do
+    if grep -q "Application startup complete" nohup.out 2>/dev/null; then
+        echo "CS-Agent started successfully (PID: $APP_PID, port: $APP_PORT)"
+        echo "Logs: tail -f $(pwd)/nohup.out"
+        exit 0
+    fi
+    if ! kill -0 $APP_PID 2>/dev/null; then
+        echo "Process crashed! Check logs:"
+        tail -30 nohup.out
+        exit 1
+    fi
+    sleep 1
+done
+
+echo "Startup taking longer than expected, but process is running (PID: $APP_PID)"
+echo "Logs: tail -f $(pwd)/nohup.out"
