@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 OPS_FILE = SCRIPT_DIR / "data" / "ops.json"
-REMOTE_API_URL = "http://43.129.183.181/api/visit-image"
+REMOTE_API_URL = "https://43.129.183.181/api/visit-image"
 
 
 def load_config(config_path: Path) -> dict:
@@ -89,17 +89,30 @@ def compress_image_to_base64(image_path: Path) -> tuple[str, int] | None:
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
 
-        for quality in [85, 75, 65, 55, 45]:
-            buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=quality, optimize=True)
-            compressed_size = buffer.tell()
+        target_size = MAX_IMAGE_SIZE
 
-            if compressed_size <= MAX_IMAGE_SIZE:
-                b64_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
-                return b64_data, compressed_size
+        for scale in [1.0, 0.5, 0.25, 0.1]:
+            if scale < 1.0:
+                current_img = img.resize(
+                    (int(img.size[0] * scale), int(img.size[1] * scale)),
+                    Image.LANCZOS
+                )
+            else:
+                current_img = img
+
+            for quality in [85, 70, 55, 40, 30]:
+                buffer = io.BytesIO()
+                current_img.save(buffer, format="JPEG", quality=quality, optimize=True)
+                compressed_size = buffer.tell()
+
+                if compressed_size <= target_size:
+                    b64_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                    return b64_data, compressed_size
 
         buffer = io.BytesIO()
-        img.save(buffer, format="JPEG", quality=40, optimize=True)
+        img.resize((int(img.size[0] * 0.1), int(img.size[1] * 0.1)), Image.LANCZOS).save(
+            buffer, format="JPEG", quality=20, optimize=True
+        )
         b64_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
         return b64_data, buffer.tell()
     except Exception as e:
@@ -182,7 +195,7 @@ def execute_operation(op: dict, index: int, total: int) -> bool:
         form_data["media_id"] = media_id
 
     try:
-        with httpx.Client(timeout=60) as client:
+        with httpx.Client(timeout=60, verify=False) as client:
             response = client.post(REMOTE_API_URL, data=form_data)
         result = response.json()
 
