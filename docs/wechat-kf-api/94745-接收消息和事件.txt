@@ -459,3 +459,5 @@ event.recall_msgid      string   撤回的消息 msgid
 开发指引（回调配置）：https://kf.weixin.qq.com/api/doc/path/93304
 发送消息：https://kf.weixin.qq.com/api/doc/path/94744
 获取客服账号链接：https://kf.weixin.qq.com/api/doc/path/94751
+
+离线文档索引：同目录 00-index.txt（覆盖账号管理、欢迎语、撤回、客户信息、会话分配、加解密附录、全局错误码等）。

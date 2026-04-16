@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     await token_manager.start()
-    logger.info("CS-Agent started")
+    logger.info("CS-Agent started (official account)")
 
     menu_file = settings.wechat_menu_file_path
     if menu_file:
@@ -44,7 +44,17 @@ async def lifespan(app: FastAPI):
         else:
             logger.warning("Failed to create WeChat menu: %s", result)
 
+    # 微信客服渠道
+    if settings.kf_enabled:
+        from app.kf_api.token_manager import kf_token_manager
+        await kf_token_manager.start()
+        logger.info("KF channel enabled, open_kfid=%s", settings.kf_open_kfid)
+
     yield
+
+    if settings.kf_enabled:
+        from app.kf_api.token_manager import kf_token_manager
+        await kf_token_manager.stop()
     await token_manager.stop()
     logger.info("CS-Agent stopped")
 
@@ -600,6 +610,73 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
         logger.exception("Failed to check passive reply condition")
 
     background_tasks.add_task(dispatch, body)
+    return PlainTextResponse("success")
+
+
+# ==================== 微信客服 (KF) 路由 ====================
+
+
+@app.get("/kf", response_class=PlainTextResponse)
+async def kf_verify_url(
+    msg_signature: str = Query(...),
+    timestamp: str = Query(...),
+    nonce: str = Query(...),
+    echostr: str = Query(...),
+):
+    """微信客服回调 URL 验证：验签解密 echostr 后原样返回明文。"""
+    settings = get_settings()
+    if not settings.kf_enabled:
+        return "KF channel not enabled"
+    from app.kf_api.crypto import KfCallbackCrypto
+    crypto = KfCallbackCrypto(
+        settings.kf_token, settings.kf_encoding_aes_key, settings.kf_corp_id
+    )
+    try:
+        plaintext = crypto.decrypt_echostr(msg_signature, timestamp, nonce, echostr)
+        return plaintext
+    except Exception:
+        logger.exception("KF URL verification failed")
+        return "verification failed"
+
+
+@app.post("/kf")
+async def kf_receive_event(request: Request, background_tasks: BackgroundTasks):
+    """接收微信客服事件通知 → 触发 sync_msg 拉取消息。"""
+    settings = get_settings()
+    if not settings.kf_enabled:
+        return PlainTextResponse("KF channel not enabled")
+
+    body = await request.body()
+    msg_signature = request.query_params.get("msg_signature", "")
+    timestamp = request.query_params.get("timestamp", "")
+    nonce = request.query_params.get("nonce", "")
+
+    # 解密回调通知
+    from app.kf_api.crypto import KfCallbackCrypto, parse_encrypted_xml
+    crypto = KfCallbackCrypto(
+        settings.kf_token, settings.kf_encoding_aes_key, settings.kf_corp_id
+    )
+    try:
+        encrypt = parse_encrypted_xml(body)
+        xml_content = crypto.decrypt_message(msg_signature, timestamp, nonce, encrypt)
+    except Exception:
+        logger.exception("KF callback decryption failed")
+        return PlainTextResponse("decrypt failed")
+
+    # 从解密后的 XML 中提取 Token（用于 sync_msg 提高频率上限）
+    callback_token = ""
+    try:
+        from xml.etree import ElementTree
+        root = ElementTree.fromstring(xml_content)
+        token_node = root.find("Token")
+        if token_node is not None and token_node.text:
+            callback_token = token_node.text
+    except Exception:
+        pass
+
+    # 异步拉取消息并处理
+    from app.handler.kf_router import kf_dispatch
+    background_tasks.add_task(kf_dispatch, callback_token)
     return PlainTextResponse("success")
 
 

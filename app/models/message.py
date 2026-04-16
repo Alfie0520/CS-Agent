@@ -27,12 +27,13 @@ class EventType(str, Enum):
 
 @dataclass
 class IncomingMessage:
-    """微信推送的原始消息/事件的统一数据模型。"""
+    """消息/事件的统一数据模型，支持多渠道（服务号、微信客服等）。"""
 
     to_user: str
     from_user: str
     create_time: int
     msg_type: MsgType
+    channel: str = ""  # "official_account" / "kf"
 
     # 普通消息公共字段
     msg_id: Optional[str] = None

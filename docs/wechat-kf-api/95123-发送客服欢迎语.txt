@@ -1,0 +1,133 @@
+来源：https://kf.weixin.qq.com/api/doc/path/95123
+标题：发送客服欢迎语 / 发送事件响应消息（微信客服 API）
+
+================================================================================
+概述
+================================================================================
+
+当特定的事件回调消息包含 code 字段（或进入会话事件返回 welcome_code），可以此 code 为凭证，调用该接口给用户发送相应事件场景下的消息，如客服欢迎语。
+
+支持发送消息类型：文本、菜单消息。
+
+特别说明（进入会话欢迎语）：
+  - 「进入会话事件」若满足通过 API 下发欢迎语条件（用户在过去 48 小时里未收过欢迎语，且未向客服发过消息），事件会额外返回 welcome_code。
+  - 开发者以 welcome_code 作为本接口的 code 参数调用，即可向客户发送客服欢迎语。
+  - 为保证体验及避免滥用：仅在收到相关事件后 20 秒内可调用，且只可调用一次。
+
+与分配会话的关系：
+  - 调用「变更会话状态」接口（见 94669-分配客服会话.txt）在部分状态下会返回 msg_code，也可作为事件响应 code 调用本接口发送回复语/结束语等（以官方最新说明为准）。
+
+================================================================================
+接口定义
+================================================================================
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg_on_event?access_token=ACCESS_TOKEN
+
+请求示例（骨架）：
+{
+	"code": "CODE",
+	"msgid": "MSG_ID",
+	"msgtype": "MSG_TYPE"
+}
+
+说明：除 code、msgid、msgtype 外，还需携带 msgtype 对应的消息体字段（见下文）。
+
+参数说明：
+  access_token  必填  string  调用接口凭证
+  code          必填  string  事件响应消息对应的 code（通过事件回调下发），仅可使用一次
+  msgid         否    string  消息 ID；若指定则原样返回，否则系统自动生成并返回。不多于 32 字节；取值范围（正则）：[0-9a-zA-Z_-]*
+  msgtype       必填  string  消息类型：text / msgmenu
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+	"msgid": "MSG_ID"
+}
+
+返回字段说明：
+  errcode   int32   返回码
+  errmsg    string  错误码描述
+  msgid     string  消息 ID
+
+================================================================================
+消息类型
+================================================================================
+
+一、文本消息（msgtype: text）
+请求示例：
+{
+   "code": "CODE",
+   "msgid": "MSG_ID",
+   "msgtype" : "text",
+   "text" : {
+       "content" : "欢迎咨询"
+   }
+}
+
+参数说明：
+  msgtype        必填  string  固定为 text
+  text             必填  obj    文本消息
+  text.content     必填  string 消息内容，最长不超过 2048 个字节
+
+二、菜单消息（msgtype: msgmenu）
+请求示例：
+{
+    "code": "CODE",
+    "msgid": "MSGID",
+    "msgtype": "msgmenu",
+    "msgmenu": {
+        "head_content": "您对本次服务是否满意呢? ",
+        "list": [
+            {
+                "type": "click",
+                "click": {
+                    "id": "101",
+                    "content": "满意"
+                }
+            },
+            {
+                "type": "click",
+                "click": {
+                    "id": "102",
+                    "content": "不满意"
+                }
+            },
+            {
+                "type": "view",
+                "view": {
+                    "url": "https://work.weixin.qq.com",
+                    "content": "点击跳转到自助查询页面"
+                }
+            },
+            {
+                "type": "miniprogram",
+                "miniprogram": {
+                    "appid": "wx123123123123123",
+                    "pagepath": "pages/index?userid=zhangsan&orderid=123123123",
+                    "content": "点击打开小程序查询更多"
+                }
+            },
+            {
+                "type": "text",
+                "text": {
+                    "content": "纯文本，支持\\n换行",
+                    "no_newline": 0
+                }
+            }
+        ],
+        "tail_content": "欢迎再次光临"
+    }
+}
+
+参数说明（摘要）：
+  msgtype               必填  string  固定为 msgmenu
+  msgmenu               必填  obj     菜单消息
+  msgmenu.head_content  否    string  起始文本，不多于 1024 字节
+  msgmenu.list          否    obj[]   菜单项配置，不超过 10 个
+  msgmenu.list.type     必填  string  click / view / miniprogram / text
+  click：click.id、click.content；view：view.url、view.content；miniprogram：appid、pagepath、content；text：text.content，可选 text.no_newline（0 换行，1 不换行，默认 0）
+  msgmenu.tail_content  否    string  结束文本，不多于 1024 字节

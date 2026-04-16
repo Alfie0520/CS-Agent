@@ -5,13 +5,15 @@ from __future__ import annotations
 import logging
 
 from app.agent.base import BaseAgent
+from app.channel.base import ChannelAdapter
 from app.models.message import EventType, IncomingMessage
-from app.wechat_api import customer_message
 
 logger = logging.getLogger(__name__)
 
 
-async def handle_event(msg: IncomingMessage, agent: BaseAgent) -> None:
+async def handle_event(
+    msg: IncomingMessage, agent: BaseAgent, channel: ChannelAdapter
+) -> None:
     if msg.event == EventType.UNSUBSCRIBE:
         logger.info("User %s unsubscribed", msg.from_user)
         return
@@ -24,7 +26,7 @@ async def handle_event(msg: IncomingMessage, agent: BaseAgent) -> None:
     for reply in response.replies:
         try:
             if reply.msg_type == "text" and reply.text:
-                await customer_message.send_text(msg.from_user, reply.text)
+                await channel.send_text(msg.from_user, reply.text)
         except Exception:
             logger.exception(
                 "Failed to send event reply to %s: %s", msg.from_user, reply

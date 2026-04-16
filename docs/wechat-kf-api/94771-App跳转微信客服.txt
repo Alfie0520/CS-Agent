@@ -1,0 +1,46 @@
+来源：https://kf.weixin.qq.com/api/doc/path/94771
+标题：App 跳转微信客服（微信客服 API）
+
+================================================================================
+功能介绍
+================================================================================
+
+部分场景下 App 需要跳转至微信打开微信客服会话以完成咨询。移动应用接入后，用户可从 App 跳转至指定的微信客服会话。
+
+该功能已向全体开发者开放：开发者需在已认证的微信开放平台账号下申请移动应用，审核通过并上架后，可获得移动应用跳转微信客服的功能权限。
+
+================================================================================
+使用说明（账号要求等）
+================================================================================
+
+移动应用开发者使用该功能，需同时满足（官方要点）：
+  - 微信开放平台账号已认证
+  - 移动应用审核通过并上架
+
+注意：若移动应用未上架，则最多只能拉起微信客服 100 次/天（用于调试）。
+
+================================================================================
+开发示例（官方代码摘录）
+================================================================================
+
+Android（需先阅读微信 Android openSDK 接入指南）：
+  调用接口：WXOpenCustomerServiceChat
+
+Java 示例要点：
+  WXOpenCustomerServiceChat.Req req = new WXOpenCustomerServiceChat.Req();
+  req.corpId = "xxxx";                               // 企业 ID
+  req.url = "https://work.weixin.qq.com/kfid/kfcxxxxx";  // 客服 URL
+  api.sendReq(req);
+
+iOS（需先阅读微信 iOS openSDK 接入指南）：
+  WXOpenCustomerServiceReq *req = [[WXOpenCustomerServiceReq alloc] init];
+  req.corpid = corpId;   // 企业 ID
+  req.url = url;         // 客服 URL
+  [WXApi sendReq:req completion:nil];
+
+回调说明（iOS 示例思路）：
+  onResp 中判断 WXOpenCustomerServiceResp，errCode==0 表示成功。
+
+官方 openSDK 文档入口（以微信开放文档最新链接为准）：
+  https://developers.weixin.qq.com/doc/oplatform/Mobile_App/Access_Guide/Android.html
+  https://developers.weixin.qq.com/doc/oplatform/Mobile_App/Access_Guide/iOS.html

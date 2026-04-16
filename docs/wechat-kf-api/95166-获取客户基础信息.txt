@@ -1,0 +1,68 @@
+来源：https://kf.weixin.qq.com/api/doc/path/95166
+标题：获取客户基础信息（微信客服 API）
+
+================================================================================
+获取客户基础信息
+================================================================================
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/customer/batchget?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+	"external_userid_list": [
+		"wmxxxxxxxxxxxxxxxxxxxxxx",
+		"zhangsan"
+	],
+	"need_enter_session_context": 0
+}
+
+参数说明：
+  access_token                  必填  string  调用接口凭证
+  external_userid_list          必填  array   external_userid 列表
+  need_enter_session_context    否    int     是否返回客户 48 小时内最后一次进入会话的上下文信息。0-不返回；1-返回。默认不返回
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+注意：
+  external_userid 需为最近 48 小时内有触发用户进入会话事件或向该客服账号发过消息的客户，否则出现在 invalid_external_userid 返回中。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+    "customer_list": [
+		{
+			"external_userid": "wmxxxxxxxxxxxxxxxxxxxxxx",
+			"nickname": "张三",
+			"avatar": "http://xxxxx",
+			"gender": 1,
+			"unionid": "oxasdaosaosdasdasdasd",
+			"enter_session_context": {
+				"scene": "123",
+				"scene_param": "abc",
+				"wechat_channels": {
+					"nickname": "进入会话的视频号名称",
+					"scene": 1
+				}
+			}
+		}
+	],
+	"invalid_external_userid": [
+		"zhangsan"
+	]
+}
+
+返回字段说明（摘要）：
+  customer_list.*.external_userid           string  微信客户的 external_userid
+  customer_list.*.nickname                  string  微信昵称
+  customer_list.*.avatar                    string  微信头像（第三方不可获取）
+  customer_list.*.gender                    int     性别（第三方不可获取时统一返回 0）
+  customer_list.*.unionid                   string  unionid（需按官方指引完成绑定等条件）
+  customer_list.*.enter_session_context     obj     48 小时内最后一次进入会话上下文（need_enter_session_context=1 才返回）
+  invalid_external_userid                   array   无效 id 列表
+
+如何获取微信客户的 unionid（官方要点摘录）：
+  1. 在微信客服管理后台「开发配置」处点击「绑定」前往微信公众平台授权，支持绑定公众号与小程序（并可能需绑定微信开放平台）；绑定主体需与企业微信主体一致等（细节以官方为准）。
+  2. 绑定完成后，可通过此接口获取对应 unionid。
+  3. 第三方服务商此接口不返回 Unionid 时，需按官方说明通过其他方式获取后，再使用 Unionid 与 external_userid 关联接口完成识别（企业微信文档：Unionid 与 external_userid 关联）。

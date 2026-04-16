@@ -1,0 +1,44 @@
+来源（微信客服）：https://kf.weixin.qq.com/api/doc/path/94772
+补充来源（小程序 API）：https://developers.weixin.qq.com/miniprogram/dev/api/open-api/service-chat/wx.openCustomerServiceChat.html
+
+================================================================================
+微信小程序打开微信客服（微信客服官方 + 小程序 API 摘录）
+================================================================================
+
+一、微信客服文档站要点（path/94772）
+----------------------------------------
+功能介绍：
+  用户会在企业的小程序里联系客服。支持在小程序里接入微信客服：用户点击后即可打开对应的微信客服会话，发起客服咨询。
+  该功能已向非个人的全体小程序开放。
+  小程序开发者需在小程序管理后台绑定同主体的微信客服（企业 ID）后，才可调用小程序相关接口接入。
+
+接入方式：
+  官网该章节可能包含按钮 open-type、配置项等说明；若离线版本不全，请以浏览器打开 path/94772 为准：
+  https://kf.weixin.qq.com/api/doc/path/94772
+
+二、小程序端 API：wx.openCustomerServiceChat（基础库 2.19.0+）
+----------------------------------------
+限制：仅在用户点击等行为中调用（不要在非点击路径随意调用）。
+
+参数 Object：
+  corpId            String   必填  企业 ID
+  extInfo           Object   必填  客服信息
+  extInfo.url       String   必填  客服链接（通常即 kf.add_contact_way 返回的 url）
+  showMessageCard   Boolean  否    是否发送小程序气泡消息，默认 false
+  sendMessageTitle  String   否    气泡消息标题
+  sendMessagePath   String   否    气泡消息小程序路径
+  sendMessageImg    String   否    气泡消息图片
+  success / fail / complete   回调函数（略）
+
+示例：
+wx.openCustomerServiceChat({
+  extInfo: { url: 'https://work.weixin.qq.com/kf/...' },
+  corpId: 'wwxxxxxxxxxxxxxxxx',
+  success(res) {}
+})
+
+三、与本项目其它离线文档的关系
+----------------------------------------
+  - 获取客服链接：94751-获取客服账号链接.txt
+  - 发送消息：94744-发送消息.txt
+  - 接收回调与拉消息：94745-接收消息和事件.txt

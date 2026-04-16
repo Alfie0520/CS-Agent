@@ -1,0 +1,36 @@
+来源：https://kf.weixin.qq.com/api/doc/path/94747
+标题：添加客服账号（微信客服 API）
+
+================================================================================
+添加客服账号
+================================================================================
+
+添加客服账号，并可设置客服名称和头像。目前一家企业最多可添加 5000 个客服账号。
+
+请求方式：POST（HTTPS）
+请求地址：https://qyapi.weixin.qq.com/cgi-bin/kf/account/add?access_token=ACCESS_TOKEN
+
+请求示例（JSON）：
+{
+    "name": "新建的客服账号",
+    "media_id": "294DpAog3YA5b9rTK4PjjfRfYLO0L5qpDHAJIzhhQ2jAEWjb9i661Q4lk8oFnPtmj"
+}
+
+参数说明：
+  access_token  必填  string  调用接口凭证
+  name          必填  string  客服账号名称，不多于 16 个字符
+  media_id      必填  string  客服头像临时素材（调用上传临时素材接口获取），不多于 128 个字节
+
+权限说明：仅允许微信客服的 Secret 所获取的 access_token 调用。
+
+返回结果示例（JSON）：
+{
+    "errcode": 0,
+    "errmsg": "ok",
+    "open_kfid": "wkAJ2GCAAAZSfhHCt7IFSvLKtMPxyJTw"
+}
+
+返回字段说明：
+  errcode      int32   返回码
+  errmsg       string  错误码描述
+  open_kfid    string  新创建的客服账号 ID
