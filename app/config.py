@@ -32,8 +32,10 @@ class Settings(BaseSettings):
     # 参访图片 API 访问密钥
     visit_image_api_key: str = ""
 
-    # 微信自定义菜单配置文件路径，agent 启动时自动创建该菜单
+    # 微信自定义菜单配置文件路径，仅在显式开启启动发布时使用
     wechat_menu_file_path: str = "wechat_menu.json"
+    # 是否在服务启动时自动发布本地菜单配置到微信
+    wechat_menu_auto_create_on_startup: bool = False
     # 菜单管理 API 访问密钥
     menu_api_key: str = ""
 
@@ -47,6 +49,12 @@ class Settings(BaseSettings):
     kf_open_kfid: str = ""  # 客服账号 ID
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def should_auto_create_wechat_menu_on_startup(self) -> bool:
+        return self.wechat_menu_auto_create_on_startup and bool(
+            self.wechat_menu_file_path
+        )
 
 
 @lru_cache

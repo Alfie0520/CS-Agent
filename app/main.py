@@ -36,13 +36,15 @@ async def lifespan(app: FastAPI):
     logger.info("CS-Agent started (official account)")
 
     menu_file = settings.wechat_menu_file_path
-    if menu_file:
+    if settings.should_auto_create_wechat_menu_on_startup:
         logger.info("Auto-creating WeChat menu from: %s", menu_file)
         result = await create_menu_from_json_file(menu_file)
         if result.get("errcode", 0) == 0:
             logger.info("WeChat menu created successfully")
         else:
             logger.warning("Failed to create WeChat menu: %s", result)
+    else:
+        logger.info("Skipping WeChat menu auto-create on startup")
 
     # 微信客服渠道
     if settings.kf_enabled:
@@ -799,4 +801,3 @@ async def manage_menu(
             return {"success": False, "error": "创建菜单需要传入 menu_file_path 或 menu_data"}
     else:
         return {"success": False, "error": f"Unknown operation: {operation}"}
-
