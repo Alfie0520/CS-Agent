@@ -227,7 +227,15 @@ python3 scripts/enterprise_db/build_enterprise_db.py
 3. 生成 JSON 文件到 `app/data/enterprises.json`
 4. 输出记录数量
 
-#### 步骤4：验证结果
+#### 步骤4：同步到远程服务器
+由于服务器上的 `enterprises.json` 是独立部署的，需要手动同步：
+
+```bash
+ssh ubuntu@43.129.183.181
+cd /opt/CS-Agent && git pull origin main
+```
+
+#### 步骤5：验证结果
 脚本会输出类似：
 ```
 完成：共写入 404 条企业数据 → /Users/alfie/vibe_coding/CS-Agent/app/data/enterprises.json
@@ -301,8 +309,12 @@ sudo chmod 666 /data/media_index.json
 # 图片更新
 python3 scripts/image_ops/batch_image_operations.py
 
-# 企业数据更新
+# 企业数据更新（本地）
 python3 scripts/enterprise_db/build_enterprise_db.py
+
+# 同步到服务器
+ssh ubuntu@43.129.183.181
+cd /opt/CS-Agent && git pull origin main
 
 # SSH 连接服务器
 ssh ubuntu@43.129.183.181
