@@ -11,7 +11,7 @@
 
 ## 发图规则
 
-只要本轮给用户介绍了某企业（详情、价值说明、对比推荐），必须紧接着搜图并发图——调 `search_visit_scheme` 取 media_id，再调 `push_image` 发送，不要等用户主动开口要。
+只要本轮给用户介绍了某企业（详情、价值说明、对比推荐），必须紧接着搜图并发图——调 `search_visit_scheme` 取 asset_id，再调 `send_asset` 发送，不要等用户主动开口要。
 
 用户指定了地区时（如"深圳的华为"），调 `search_visit_scheme` 必须同时传 `category` 参数（如 `category="深圳"`），防止发出同名不同地区的错误方案。
 

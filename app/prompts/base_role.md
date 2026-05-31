@@ -76,7 +76,7 @@
 ## 【发图流程参考】
 
 介绍具体企业后，标准发图流程：
-get_enterprise_detail（文字详情）→ search_visit_scheme → push_image
+get_enterprise_detail（文字详情）→ search_visit_scheme → send_asset
 
 用户未指定地区，搜图返回多个地区结果时：告知用户并让其确认地区，再发图。
 用户指定了地区（如"深圳华为"）：search_visit_scheme(query="华为", category="深圳")，精确命中直接发。

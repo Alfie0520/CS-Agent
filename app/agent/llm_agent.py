@@ -13,10 +13,11 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agent.base import BaseAgent
 from app.agent.session_store import SessionStore
+from app.assets.delivery import AssetDeliveryService
+from app.assets.index import load_asset_index, search_assets as search_asset_records
 from app.channel.base import ChannelAdapter
 from app.config import get_settings
 from app.enterprise_data import fmt_detail, fmt_overview, get_detail, search_overview
-from app.media_index import get_overview, list_schemes, search
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
 
 logger = logging.getLogger(__name__)
@@ -114,11 +115,17 @@ async def get_visit_scheme_overview(ctx: RunContext[UserDeps]) -> str:
     分类名即文件夹名，按地理位置命名（如 09河南、广东-深圳）。
     用于回答「有哪些参访方案」「覆盖哪些地区」「一共多少方案」等。
     """
-    data = get_overview()
-    total = data.get("total", 0)
-    cats = data.get("categories", {})
+    settings = get_settings()
+    items = load_asset_index(settings.asset_index_path)
+    cats: dict[str, int] = {}
+    for x in items:
+        if x.get("kind") != "image":
+            continue
+        category_name = x.get("category", "")
+        cats[category_name] = cats.get(category_name, 0) + 1
+    total = sum(cats.values())
     lines = [f"参访方案总数：{total} 个", "按地理位置分类："]
-    for name, count in cats.items():
+    for name, count in sorted(cats.items()):
         lines.append(f"  - {name}：{count} 个")
     return "\n".join(lines)
 
@@ -130,12 +137,19 @@ async def list_visit_schemes(ctx: RunContext[UserDeps], category: str = "") -> s
     Args:
         category: 分类名（如 09河南、广东-深圳），为空则列出全部方案。
     """
-    items = list_schemes(category=category if category else None)
+    settings = get_settings()
+    items = search_asset_records(
+        settings.asset_index_path,
+        category=category,
+        kind="image",
+    )
     if not items:
         return f"未找到方案。" + (f"（分类「{category}」不存在或为空）" if category else "")
     lines = [f"共 {len(items)} 个方案："]
     for x in items:
-        lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）")
+        lines.append(
+            f"  - {x.get('name', '')}（{x.get('category', '')}），asset_id={x.get('asset_id', '')}"
+        )
     return "\n".join(lines)
 
 
@@ -160,6 +174,32 @@ async def push_image(ctx: RunContext[UserDeps], media_id: str) -> str:
     except Exception as e:
         logger.warning("push_image failed for %s: %s", ctx.deps.user_id, e)
         return f"图片发送失败：{e}"
+
+
+@_pydantic_agent.tool
+async def send_asset(ctx: RunContext[UserDeps], asset_id: str) -> str:
+    """立即向用户发送一个业务资产。
+
+    当前支持发送参访方案图片。调用方只需要传 asset_id，不需要知道微信 media_id。
+    工具内部会根据当前渠道自动上传图片素材、缓存 media_id，并完成发送。
+
+    Args:
+        asset_id: search_visit_scheme 或 search_assets 返回的资产 ID。
+    """
+    settings = get_settings()
+    service = AssetDeliveryService(
+        asset_root=settings.asset_root_path,
+        index_path=settings.asset_index_path,
+        cache_path=settings.asset_delivery_cache_path,
+    )
+    try:
+        result = await service.send_asset(ctx.deps.channel, ctx.deps.user_id, asset_id)
+        if result.get("errcode", 0) == 0:
+            return "资产已发送。"
+        return f"资产发送失败：{result.get('errmsg', result)}"
+    except Exception as e:
+        logger.warning("send_asset failed for %s asset=%s: %s", ctx.deps.user_id, asset_id, e)
+        return f"资产发送失败：{e}"
 
 
 @_pydantic_agent.tool
@@ -206,10 +246,10 @@ async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
 
 @_pydantic_agent.tool
 async def search_visit_scheme(ctx: RunContext[UserDeps], query: str, category: str = "") -> str:
-    """按企业名称搜索参访方案图片，可指定地区分类精确过滤，返回匹配结果的 media_id。
+    """按企业名称搜索参访方案图片，可指定地区分类精确过滤，返回匹配结果的 asset_id。
 
-    查到结果后，调用 push_image(media_id) 将图片发给用户。
-    多个匹配时，根据对话上下文选择正确的图片，逐张调用 push_image 发送。
+    查到结果后，调用 send_asset(asset_id) 将图片发给用户。
+    多个匹配时，根据对话上下文选择正确的图片，逐张调用 send_asset 发送。
 
     重要：当用户指定了地区（如"深圳的华为"、"河南的企业"），必须同时传入 category
     参数，避免将同名但不同地区的企业方案发给用户。
@@ -219,16 +259,57 @@ async def search_visit_scheme(ctx: RunContext[UserDeps], query: str, category: s
         category: 地区过滤关键词，子串匹配，如「深圳」「河南」「浙江」。
                   用户明确提到地区时必须填写；不确定时留空。
     """
-    items = search(query, category=category)
+    settings = get_settings()
+    items = search_asset_records(
+        settings.asset_index_path,
+        query=query,
+        category=category,
+        kind="image",
+    )
     if not items:
         hint = f"（地区「{category}」）" if category else ""
         return f"未找到与「{query}」{hint}匹配的参访方案图片。"
     if len(items) == 1:
         x = items[0]
-        return f"找到 1 个：{x.get('image_name', '')}（{x.get('category', '')}），media_id={x.get('media_id', '')}，请调用 push_image 发送。"
-    lines = [f"找到 {len(items)} 个匹配，请根据对话上下文选择正确的方案后调用 push_image 发送："]
+        return f"找到 1 个：{x.get('name', '')}（{x.get('category', '')}），asset_id={x.get('asset_id', '')}，请调用 send_asset 发送。"
+    lines = [f"找到 {len(items)} 个匹配，请根据对话上下文选择正确的方案后调用 send_asset 发送："]
     for x in items:
-        lines.append(f"  - {x.get('image_name', '')}（{x.get('category', '')}）：media_id={x.get('media_id', '')}")
+        lines.append(
+            f"  - {x.get('name', '')}（{x.get('category', '')}）：asset_id={x.get('asset_id', '')}"
+        )
+    return "\n".join(lines)
+
+
+@_pydantic_agent.tool
+async def search_assets(
+    ctx: RunContext[UserDeps],
+    query: str,
+    category: str = "",
+    kind: str = "image",
+) -> str:
+    """搜索可发送给用户的业务资产，返回 asset_id。
+
+    当前主要用于搜索参访方案图片。查到后调用 send_asset(asset_id) 发送。
+
+    Args:
+        query: 资产或企业名称关键词，如「华为」「胖东来」。
+        category: 地区过滤关键词，如「深圳」「河南」。
+        kind: 资产类型，目前默认 image。
+    """
+    settings = get_settings()
+    items = search_asset_records(
+        settings.asset_index_path,
+        query=query,
+        category=category,
+        kind=kind,
+    )
+    if not items:
+        return f"未找到与「{query}」匹配的资产。"
+    lines = [f"找到 {len(items)} 个资产："]
+    for x in items:
+        lines.append(
+            f"  - {x.get('name', '')}（{x.get('category', '')}）：asset_id={x.get('asset_id', '')}"
+        )
     return "\n".join(lines)
 
 

@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # 参访图片 API 访问密钥
     visit_image_api_key: str = ""
 
+    # 运行时业务数据路径：用于脱离代码发布更新参访方案和媒体资产
+    enterprise_data_path: str = "/data/cs-agent-data/enterprises.json"
+    asset_root_path: str = "/data/cs-agent-assets"
+    asset_index_path: str = "/data/cs-agent-assets/asset_index.json"
+    asset_delivery_cache_path: str = "/data/cs-agent-assets/delivery_cache.json"
+
     # 微信自定义菜单配置文件路径，仅在显式开启启动发布时使用
     wechat_menu_file_path: str = "wechat_menu.json"
     # 是否在服务启动时自动发布本地菜单配置到微信
