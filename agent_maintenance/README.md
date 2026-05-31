@@ -32,12 +32,16 @@ Read this file first. Do not rely on old chat history.
 Set these in your shell before using scripts:
 
 ```bash
-export CS_AGENT_BASE_URL="https://YOUR_HOST"
-export CS_AGENT_API_KEY="YOUR_VISIT_IMAGE_API_KEY"
+export CS_AGENT_BASE_URL="https://bgtx.work"
+export CS_AGENT_API_KEY="$(ssh ubuntu@43.129.183.181 "grep '^VISIT_IMAGE_API_KEY=' /opt/CS-Agent/.env | cut -d= -f2-")"
 ```
 
-On the production server, the key is in `/opt/CS-Agent/.env` as
-`VISIT_IMAGE_API_KEY`.
+Do not print or paste `CS_AGENT_API_KEY`. The command above reads it from the
+production server's `/opt/CS-Agent/.env` file without storing it in the repo.
+If SSH prompts for a password, enter the server password manually.
+
+If maintaining a non-production deployment, replace `CS_AGENT_BASE_URL` and the
+SSH target/path with that deployment's values.
 
 ## Recommended Workflows
 
