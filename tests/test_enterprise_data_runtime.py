@@ -10,6 +10,9 @@ class EnterpriseDataRuntimeTest(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.data_path = Path(self.tmpdir.name) / "enterprises.json"
         os.environ["ENTERPRISE_DATA_PATH"] = str(self.data_path)
+        os.environ["WECHAT_APP_ID"] = "test-app-id"
+        os.environ["WECHAT_APP_SECRET"] = "test-app-secret"
+        os.environ["WECHAT_TOKEN"] = "test-token"
 
         from app.config import get_settings
 
@@ -20,6 +23,9 @@ class EnterpriseDataRuntimeTest(unittest.TestCase):
 
         get_settings.cache_clear()
         os.environ.pop("ENTERPRISE_DATA_PATH", None)
+        os.environ.pop("WECHAT_APP_ID", None)
+        os.environ.pop("WECHAT_APP_SECRET", None)
+        os.environ.pop("WECHAT_TOKEN", None)
         self.tmpdir.cleanup()
 
     def _write_enterprises(self, names):
