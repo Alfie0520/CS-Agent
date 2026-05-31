@@ -6,3 +6,5 @@ python-dotenv
 lxml
 pydantic-ai[openai]
 cryptography
+python-multipart
+Pillow

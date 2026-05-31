@@ -24,9 +24,9 @@ class KfChannelAdapter:
         return await messaging.send_text(user_id, self._open_kfid, content)
 
     async def send_image(self, user_id: str, media_id: str) -> dict[str, Any]:
-        # Phase 2 暂不支持图片，降级为文字提示
-        logger.info("KF send_image skipped (not supported yet): user=%s", user_id)
-        return {"errcode": 0, "errmsg": "image not supported in KF channel yet"}
+        from app.kf_api import messaging
+
+        return await messaging.send_image(user_id, self._open_kfid, media_id)
 
     async def send_menu(
         self,

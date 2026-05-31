@@ -5,7 +5,9 @@ from fastapi import BackgroundTasks, FastAPI, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from app.config import get_settings
+from app.assets.router import router as assets_router
 from app.core.security import check_signature
+from app.enterprise_api import router as enterprise_router
 from app.core.xml_parser import build_transfer_kf_xml, parse_xml
 from app.handler.router import dispatch
 from app.models.message import MsgType
@@ -62,6 +64,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CS-Agent", lifespan=lifespan)
+app.include_router(assets_router)
+app.include_router(enterprise_router)
 
 _menus_html = """
 <!DOCTYPE html>

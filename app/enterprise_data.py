@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
 import re
-from functools import lru_cache
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
+
+from app.config import get_settings
 
 _DATA_PATH = Path(__file__).parent / "data" / "enterprises.json"
 
@@ -28,25 +30,30 @@ class Enterprise(TypedDict):
     pain_points: str
 
 
-# ---------- 内部数据结构 ----------
-
-_enterprises: list[Enterprise] = []
-_id_index: dict[int, Enterprise] = {}
-_theme_index: dict[str, list[int]] = {}   # theme_tag → [enterprise_id, ...]
-_loaded = False
+def get_data_path() -> Path:
+    """获取运行时企业数据路径，配置文件不存在时回退到代码内置数据。"""
+    configured = Path(get_settings().enterprise_data_path)
+    return configured if configured.exists() else _DATA_PATH
 
 
-def _ensure_loaded() -> None:
-    global _enterprises, _id_index, _theme_index, _loaded
-    if _loaded:
-        return
-    with open(_DATA_PATH, encoding="utf-8") as f:
-        _enterprises = json.load(f)
-    _id_index = {e["id"]: e for e in _enterprises}
-    for e in _enterprises:
-        for tag in e.get("themes", []):
-            _theme_index.setdefault(tag, []).append(e["id"])
-    _loaded = True
+def _atomic_write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    tmp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def load_enterprises() -> list[Enterprise]:
+    """每次从当前 JSON 文件加载企业数据，避免业务数据更新依赖服务重启。"""
+    with open(get_data_path(), encoding="utf-8") as f:
+        data = json.load(f)
+    return data if isinstance(data, list) else []
+
+
+def save_enterprises(items: list[dict[str, Any]], path: str | Path | None = None) -> None:
+    """原子写入企业数据 JSON。"""
+    target = Path(path) if path else Path(get_settings().enterprise_data_path)
+    _atomic_write_json(target, items)
 
 
 # ---------- 内部匹配工具 ----------
@@ -68,11 +75,13 @@ def _keyword_match(e: Enterprise, keyword: str) -> bool:
     return False
 
 
-def _fuzzy_match_names(keyword: str, cutoff: float = 0.5) -> list[int]:
+def _fuzzy_match_names(
+    enterprises: list[Enterprise], keyword: str, cutoff: float = 0.5
+) -> list[int]:
     """用 difflib 对企业名做模糊匹配，返回命中的企业 id 列表。"""
-    all_names = [e["name"] for e in _enterprises]
+    all_names = [e["name"] for e in enterprises]
     matches = difflib.get_close_matches(keyword, all_names, n=10, cutoff=cutoff)
-    return [e["id"] for e in _enterprises if e["name"] in matches]
+    return [e["id"] for e in enterprises if e["name"] in matches]
 
 
 # ---------- 公开 API ----------
@@ -95,9 +104,8 @@ def search_overview(
 
     返回列表，每项包含 id、city、name、themes。
     """
-    _ensure_loaded()
-
-    candidates = list(_enterprises)
+    enterprises = load_enterprises()
+    candidates = list(enterprises)
 
     # 城市过滤（子串匹配）
     if city:
@@ -117,7 +125,7 @@ def search_overview(
         matched = [e for e in candidates if _keyword_match(e, keyword)]
         # 无精确命中时，对企业名做模糊兜底
         if not matched:
-            fuzzy_ids = set(_fuzzy_match_names(keyword))
+            fuzzy_ids = set(_fuzzy_match_names(enterprises, keyword))
             matched = [e for e in candidates if e["id"] in fuzzy_ids]
         candidates = matched
 
@@ -144,28 +152,29 @@ def get_detail(
 
     两个参数可同时传入，结果取并集去重。
     """
-    _ensure_loaded()
+    enterprises = load_enterprises()
+    id_index = {e["id"]: e for e in enterprises}
 
     result_ids: set[int] = set()
 
     if ids:
         for eid in ids:
-            if eid in _id_index:
+            if eid in id_index:
                 result_ids.add(eid)
 
     if names:
         for name in names:
             norm_name = _norm(name)
             # 先做子串匹配
-            exact = [e["id"] for e in _enterprises if norm_name in _norm(e["name"])]
+            exact = [e["id"] for e in enterprises if norm_name in _norm(e["name"])]
             if exact:
                 result_ids.update(exact)
             elif fuzzy:
-                fuzzy_ids = _fuzzy_match_names(name, cutoff=0.4)
+                fuzzy_ids = _fuzzy_match_names(enterprises, name, cutoff=0.4)
                 result_ids.update(fuzzy_ids)
 
     # 保持原数据顺序
-    return [_id_index[eid] for eid in sorted(result_ids) if eid in _id_index]
+    return [id_index[eid] for eid in sorted(result_ids) if eid in id_index]
 
 
 # ---------- 格式化输出（供 tool 返回给 LLM 使用）----------

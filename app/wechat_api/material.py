@@ -12,6 +12,7 @@ from app.wechat_api.token_manager import token_manager
 
 _ADD_MATERIAL_PATH = "/cgi-bin/material/add_material"
 _DEL_MATERIAL_PATH = "/cgi-bin/material/del_material"
+_GET_MATERIAL_PATH = "/cgi-bin/material/get_material"
 
 
 async def add_material_image(file_path: str | Path) -> dict[str, Any]:
@@ -58,3 +59,25 @@ async def delete_material_image(media_id: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(url, json=payload)
     return resp.json()
+
+
+async def get_material_image(media_id: str) -> dict[str, Any]:
+    """根据永久素材 media_id 下载图片内容。"""
+    token = await token_manager.get_token()
+    settings = get_settings()
+    url = f"{settings.wechat_api_base_url}{_GET_MATERIAL_PATH}?access_token={token}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(url, json={"media_id": media_id})
+
+    content_type = resp.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            return resp.json()
+        except Exception:
+            return {"errcode": -1, "errmsg": resp.text}
+
+    return {
+        "content": resp.content,
+        "content_type": content_type,
+        "status_code": resp.status_code,
+    }
