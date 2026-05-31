@@ -377,6 +377,7 @@ async def notify_colleague(
     summary: str,
     recommended_action: str = "",
     urgency: str = "normal",
+    customer_profile: str = "",
 ) -> str:
     """通知内部同事跟进高转化或需要人工介入的客户。
 
@@ -386,11 +387,18 @@ async def notify_colleague(
     - 用户是渠道方，需要三方会客、人工承接或快速响应。
     - Agent 无法可靠回答，需要人类同事介入。
 
+    通知要像销售线索简报，不要写技术语言：
+    - reason 写清楚为什么值得人工跟进。
+    - summary 写案发现场，尽量包含用户原话、明确提到的城市/企业/人数/时间/预算/合作方式。
+    - customer_profile 写简要用户画像，如终端客户/渠道方、需求阶段、已知行业或目的。
+    - recommended_action 写同事下一步怎么承接。
+
     Args:
-        reason: 触发通知的原因。
-        summary: 对用户诉求和上下文的简短摘要。
+        reason: 为什么这是高意向或需要人工介入。
+        summary: 案发现场，对用户诉求和上下文的详细业务摘要。
         recommended_action: 建议同事下一步做什么。
         urgency: 紧急程度，如 normal/high/urgent。
+        customer_profile: 简要用户画像，不确定时写"信息不足，待人工补充"。
     """
     started = time.perf_counter()
     content = build_colleague_notification(
@@ -400,6 +408,7 @@ async def notify_colleague(
         summary=summary,
         recommended_action=recommended_action,
         urgency=urgency,
+        customer_profile=customer_profile,
     )
     result = await send_wework_bot_text(content)
     _log_tool_done(

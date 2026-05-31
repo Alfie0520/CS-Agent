@@ -1,10 +1,35 @@
 import os
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 
 class WeWorkNotificationTest(unittest.IsolatedAsyncioTestCase):
+    def test_build_colleague_notification_is_customer_facing_brief(self):
+        from app.notification.wework_bot import build_colleague_notification
+
+        content = build_colleague_notification(
+            channel="kf",
+            user_id="external-user",
+            reason="客户明确询问西安比亚迪参访报价，已出现预算沟通意向。",
+            summary="用户说：想看西安比亚迪，两周后大概 20 人，问能不能给预算。",
+            customer_profile="疑似企业培训负责人，需求阶段接近方案和报价确认。",
+            recommended_action="尽快加微信确认出行时间、人数和预算口径。",
+            urgency="high",
+            occurred_at=datetime(2026, 6, 1, 10, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+
+        self.assertIn("CS-Agent 高意向客户提醒", content)
+        self.assertIn("发生时间：2026-06-01 10:30", content)
+        self.assertIn("跟进优先级：高", content)
+        self.assertIn("客户来源：微信客服", content)
+        self.assertIn("案发现场：", content)
+        self.assertIn("简要用户画像：", content)
+        self.assertIn("建议下一步：", content)
+        self.assertNotIn("用户渠道", content)
+
     async def test_send_text_includes_keyword_and_posts_payload(self):
         from app.notification.wework_bot import send_wework_bot_text
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Awaitable, Callable
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -79,17 +81,37 @@ def build_colleague_notification(
     summary: str,
     recommended_action: str = "",
     urgency: str = "normal",
+    customer_profile: str = "",
+    occurred_at: datetime | None = None,
 ) -> str:
+    happened_at = occurred_at or datetime.now(ZoneInfo("Asia/Shanghai"))
+    channel_label = {
+        "kf": "微信客服",
+        "official_account": "公众号",
+    }.get(channel, channel or "未知渠道")
+    urgency_label = {
+        "urgent": "紧急",
+        "high": "高",
+        "normal": "普通",
+        "low": "低",
+    }.get((urgency or "normal").lower(), urgency or "普通")
+
     lines = [
-        "CS-Agent 线索通知",
+        "CS-Agent 高意向客户提醒",
         "",
-        f"紧急程度：{urgency or 'normal'}",
-        f"触发原因：{reason}",
-        f"用户渠道：{channel}",
-        f"用户 ID：{user_id}",
+        f"发生时间：{happened_at.strftime('%Y-%m-%d %H:%M')}",
+        f"跟进优先级：{urgency_label}",
+        f"客户来源：{channel_label}",
+        f"客户标识：{user_id}",
         "",
-        f"对话摘要：{summary}",
+        "为什么值得跟进：",
+        reason.strip() or "客户出现高意向行为，需要人工判断是否承接。",
+        "",
+        "案发现场：",
+        summary.strip() or "客户表达了进一步咨询意向，请查看会话上下文。",
     ]
+    if customer_profile:
+        lines.extend(["", "简要用户画像：", customer_profile.strip()])
     if recommended_action:
-        lines.extend(["", f"建议动作：{recommended_action}"])
+        lines.extend(["", "建议下一步：", recommended_action.strip()])
     return "\n".join(lines)
