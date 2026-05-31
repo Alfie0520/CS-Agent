@@ -1,7 +1,8 @@
 """企业参访数据加载与检索模块。
 
-数据源：app/data/enterprises.json（由 scripts/build_enterprise_db.py 从 Excel 生成）。
-模块在首次调用时懒加载数据并构建内存索引，后续查询直接命中索引，无需重复 IO。
+数据源优先使用运行时配置的 JSON，文件不存在时回退到代码内置
+app/data/enterprises.json（由 scripts/build_enterprise_db.py 从 Excel 生成）。
+查询时每次读取当前 JSON，避免业务数据更新依赖服务重启。
 """
 
 from __future__ import annotations
@@ -30,6 +31,19 @@ class Enterprise(TypedDict):
     pain_points: str
 
 
+_REQUIRED_FIELDS: dict[str, type | tuple[type, ...]] = {
+    "id": int,
+    "city": str,
+    "name": str,
+    "themes": list,
+    "visit_experience": str,
+    "sharing_topics": str,
+    "core_value": str,
+    "knowledge_points": str,
+    "pain_points": str,
+}
+
+
 def get_data_path() -> Path:
     """获取运行时企业数据路径，配置文件不存在时回退到代码内置数据。"""
     configured = Path(get_settings().enterprise_data_path)
@@ -54,6 +68,27 @@ def save_enterprises(items: list[dict[str, Any]], path: str | Path | None = None
     """原子写入企业数据 JSON。"""
     target = Path(path) if path else Path(get_settings().enterprise_data_path)
     _atomic_write_json(target, items)
+
+
+def validate_enterprises(data: Any) -> list[dict[str, Any]]:
+    """校验运行时企业 JSON，返回可保存的数据。"""
+    if not isinstance(data, list):
+        raise ValueError("Enterprise data must be a JSON array")
+    seen_ids: set[int] = set()
+    for index, row in enumerate(data):
+        if not isinstance(row, dict):
+            raise ValueError(f"row {index} must be an object")
+        for field, expected_type in _REQUIRED_FIELDS.items():
+            if field not in row:
+                raise ValueError(f"row {index} missing required field: {field}")
+            if not isinstance(row[field], expected_type):
+                raise ValueError(f"row {index} field {field} must be {expected_type.__name__}")
+        if row["id"] in seen_ids:
+            raise ValueError(f"duplicate enterprise id: {row['id']}")
+        seen_ids.add(row["id"])
+        if not all(isinstance(theme, str) for theme in row["themes"]):
+            raise ValueError(f"row {index} themes must be a list of strings")
+    return data
 
 
 # ---------- 内部匹配工具 ----------

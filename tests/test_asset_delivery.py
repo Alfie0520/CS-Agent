@@ -60,6 +60,29 @@ class AssetDeliveryTest(unittest.IsolatedAsyncioTestCase):
         cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
         self.assertEqual("kf-media-1", cache[0]["media_id"])
 
+    async def test_send_asset_logs_cache_and_upload_timing(self):
+        from app.assets.delivery import AssetDeliveryService
+
+        async def upload(channel_name, file_path, media_type):
+            return {"media_id": "kf-media-1", "expires_in": 7200}
+
+        channel = FakeChannel()
+        service = AssetDeliveryService(
+            asset_root=self.root,
+            index_path=self.index_path,
+            cache_path=self.cache_path,
+            upload_media=upload,
+        )
+
+        with self.assertLogs("app.assets.delivery", level="INFO") as captured:
+            await service.send_asset(channel, "user-1", "visit_image:广东-深圳:华为")
+            await service.send_asset(channel, "user-1", "visit_image:广东-深圳:华为")
+
+        logs = "\n".join(captured.output)
+        self.assertIn("asset_delivery upload_done", logs)
+        self.assertIn("asset_delivery cache_hit", logs)
+        self.assertIn("asset_delivery send_done", logs)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     kf_encoding_aes_key: str = ""
     kf_api_base_url: str = "https://qyapi.weixin.qq.com"
     kf_open_kfid: str = ""  # 客服账号 ID
+    # 是否自动调用企业微信 service_state 接口切换到智能助手接待。
+    # 部分账号无此接口权限，默认关闭以避免每条客服消息都刷 48002。
+    kf_auto_transition_enabled: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

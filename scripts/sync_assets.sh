@@ -21,3 +21,5 @@ fi
 rsync -av --delete "${LOCAL_IMAGES_DIR%/}/" "${SSH_TARGET}:${REMOTE_ASSET_ROOT}/images/"
 curl -fsS -X POST "${API_BASE_URL}/api/assets/rescan" -F "api_key=${API_KEY}"
 echo
+curl -fsS "${API_BASE_URL}/api/assets/stats?api_key=${API_KEY}"
+echo

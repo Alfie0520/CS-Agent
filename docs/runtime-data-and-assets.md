@@ -18,6 +18,17 @@ JSON and replaces the file atomically:
 scripts/upload_enterprise_data.sh app/data/enterprises.json https://YOUR_HOST API_KEY
 ```
 
+Validate without replacing the runtime file:
+
+```bash
+scripts/upload_enterprise_data.sh app/data/enterprises.json https://YOUR_HOST API_KEY --dry-run
+```
+
+The API checks required fields (`id`, `city`, `name`, `themes`,
+`visit_experience`, `sharing_topics`, `core_value`, `knowledge_points`,
+`pain_points`) before writing. A valid upload is written atomically so readers
+never observe a half-written JSON file.
+
 The Excel-to-JSON conversion remains local:
 
 ```bash
@@ -58,6 +69,18 @@ curl -X POST https://YOUR_HOST/api/assets/image \
   -F "image_name=华为.png" \
   -F "image_file=@./华为.png"
 ```
+
+Useful read APIs:
+
+```bash
+curl "https://YOUR_HOST/api/assets/search?api_key=API_KEY&query=比亚迪&category=西安"
+curl "https://YOUR_HOST/api/assets/stats?api_key=API_KEY"
+curl "https://YOUR_HOST/api/assets/visit_image:16陕西:西安比亚迪（展厅）?api_key=API_KEY"
+```
+
+Uploads reject empty files, path-like file names, and unsupported image suffixes.
+Every add, replace, delete, full sync, or restore should end by regenerating the
+index through `/api/assets/rescan`.
 
 The agent searches image assets by `asset_id` and sends them through
 `send_asset(asset_id)`. The delivery layer uploads temporary media to the active

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -12,6 +13,8 @@ from app.assets.index import get_asset
 from app.channel.base import ChannelAdapter
 
 UploadMedia = Callable[[str, Path, str], Awaitable[dict[str, Any]]]
+
+logger = logging.getLogger(__name__)
 
 
 async def default_upload_media(
@@ -46,6 +49,7 @@ class AssetDeliveryService:
     async def send_asset(
         self, channel: ChannelAdapter, user_id: str, asset_id: str
     ) -> dict[str, Any]:
+        started = time.perf_counter()
         asset = get_asset(self.index_path, asset_id)
         if not asset:
             return {"errcode": -1, "errmsg": f"Asset not found: {asset_id}"}
@@ -54,7 +58,17 @@ class AssetDeliveryService:
 
         file_path = self._resolve_asset_path(asset["path"])
         media_id = await self._get_or_upload_media(channel.channel_name, asset, file_path)
-        return await channel.send_image(user_id, media_id)
+        send_started = time.perf_counter()
+        result = await channel.send_image(user_id, media_id)
+        logger.info(
+            "asset_delivery send_done channel=%s asset_id=%s elapsed_ms=%.1f total_ms=%.1f errcode=%s",
+            channel.channel_name,
+            asset_id,
+            (time.perf_counter() - send_started) * 1000,
+            (time.perf_counter() - started) * 1000,
+            result.get("errcode"),
+        )
+        return result
 
     def _resolve_asset_path(self, rel_path: str) -> Path:
         root = self.asset_root.resolve()
@@ -73,12 +87,26 @@ class AssetDeliveryService:
         media_type = "image"
         cached = self._find_valid_cache(channel_name, asset["asset_id"], asset["sha256"], media_type)
         if cached:
+            logger.info(
+                "asset_delivery cache_hit channel=%s asset_id=%s expires_at=%s",
+                channel_name,
+                asset["asset_id"],
+                cached.get("expires_at"),
+            )
             return cached["media_id"]
 
+        started = time.perf_counter()
         result = await self.upload_media(channel_name, file_path, media_type)
         media_id = result.get("media_id")
         if not media_id:
             raise RuntimeError(f"Media upload failed: {result}")
+        logger.info(
+            "asset_delivery upload_done channel=%s asset_id=%s bytes=%s elapsed_ms=%.1f",
+            channel_name,
+            asset["asset_id"],
+            file_path.stat().st_size,
+            (time.perf_counter() - started) * 1000,
+        )
 
         expires_in = int(result.get("expires_in") or 259200)
         self._upsert_cache(

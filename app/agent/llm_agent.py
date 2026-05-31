@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,22 @@ from app.enterprise_data import fmt_detail, fmt_overview, get_detail, search_ove
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
 
 logger = logging.getLogger(__name__)
+
+
+def _elapsed_ms(started: float) -> float:
+    return (time.perf_counter() - started) * 1000
+
+
+def _log_tool_done(tool: str, started: float, channel: str, **fields: object) -> None:
+    suffix = " ".join(f"{key}={value}" for key, value in fields.items())
+    logger.info(
+        "agent_tool done tool=%s channel=%s elapsed_ms=%.1f%s%s",
+        tool,
+        channel,
+        _elapsed_ms(started),
+        " " if suffix else "",
+        suffix,
+    )
 
 _SUBSCRIBE_SCENE: dict[str, str] = {
     "ADD_SCENE_SEARCH": "搜索公众号",
@@ -186,6 +203,7 @@ async def send_asset(ctx: RunContext[UserDeps], asset_id: str) -> str:
     Args:
         asset_id: search_visit_scheme 或 search_assets 返回的资产 ID。
     """
+    started = time.perf_counter()
     settings = get_settings()
     service = AssetDeliveryService(
         asset_root=settings.asset_root_path,
@@ -194,10 +212,12 @@ async def send_asset(ctx: RunContext[UserDeps], asset_id: str) -> str:
     )
     try:
         result = await service.send_asset(ctx.deps.channel, ctx.deps.user_id, asset_id)
+        _log_tool_done("send_asset", started, ctx.deps.channel.channel_name, asset_id=asset_id)
         if result.get("errcode", 0) == 0:
             return "资产已发送。"
         return f"资产发送失败：{result.get('errmsg', result)}"
     except Exception as e:
+        _log_tool_done("send_asset", started, ctx.deps.channel.channel_name, asset_id=asset_id, error=type(e).__name__)
         logger.warning("send_asset failed for %s asset=%s: %s", ctx.deps.user_id, asset_id, e)
         return f"资产发送失败：{e}"
 
@@ -219,6 +239,7 @@ async def send_visit_scheme_assets(
         category: 地区过滤关键词，如「西安」「陕西」「深圳」。用户明确提到地区时必须填写。
         max_items: 最多发送几张图。用户说「随便看看」默认 1；明确要某企业全部方案时可用 2。
     """
+    started = time.perf_counter()
     settings = get_settings()
     items = search_asset_records(
         settings.asset_index_path,
@@ -227,6 +248,7 @@ async def send_visit_scheme_assets(
         kind="image",
     )
     if not items:
+        _log_tool_done("send_visit_scheme_assets", started, ctx.deps.channel.channel_name, query=query, category=category, count=0)
         hint = f"（地区「{category}」）" if category else ""
         return f"未找到与「{query}」{hint}匹配的参访方案图片。"
 
@@ -258,6 +280,16 @@ async def send_visit_scheme_assets(
         lines.append(f"另有 {len(items) - limit} 张匹配图片未发送，可按用户需要继续发送。")
     if failed:
         lines.append("发送失败：" + "；".join(failed))
+    _log_tool_done(
+        "send_visit_scheme_assets",
+        started,
+        ctx.deps.channel.channel_name,
+        query=query,
+        category=category,
+        matched=len(items),
+        sent=len(sent),
+        failed=len(failed),
+    )
     return "\n".join(lines) if lines else "未发送任何图片。"
 
 
@@ -278,10 +310,13 @@ async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
     Args:
         content: 要立即推送给用户的消息内容。
     """
+    started = time.perf_counter()
     try:
         await ctx.deps.channel.send_text(ctx.deps.user_id, content)
+        _log_tool_done("push_message", started, ctx.deps.channel.channel_name, chars=len(content))
         return "消息已推送。"
     except Exception as e:
+        _log_tool_done("push_message", started, ctx.deps.channel.channel_name, error=type(e).__name__)
         logger.warning("push_message failed for %s: %s", ctx.deps.user_id, e)
         return f"推送失败：{e}"
 
@@ -318,6 +353,7 @@ async def search_visit_scheme(ctx: RunContext[UserDeps], query: str, category: s
         category: 地区过滤关键词，子串匹配，如「深圳」「河南」「浙江」。
                   用户明确提到地区时必须填写；不确定时留空。
     """
+    started = time.perf_counter()
     settings = get_settings()
     items = search_asset_records(
         settings.asset_index_path,
@@ -325,6 +361,7 @@ async def search_visit_scheme(ctx: RunContext[UserDeps], query: str, category: s
         category=category,
         kind="image",
     )
+    _log_tool_done("search_visit_scheme", started, ctx.deps.channel.channel_name, query=query, category=category, count=len(items))
     if not items:
         hint = f"（地区「{category}」）" if category else ""
         return f"未找到与「{query}」{hint}匹配的参访方案图片。"
@@ -355,6 +392,7 @@ async def search_assets(
         category: 地区过滤关键词，如「深圳」「河南」。
         kind: 资产类型，目前默认 image。
     """
+    started = time.perf_counter()
     settings = get_settings()
     items = search_asset_records(
         settings.asset_index_path,
@@ -362,6 +400,7 @@ async def search_assets(
         category=category,
         kind=kind,
     )
+    _log_tool_done("search_assets", started, ctx.deps.channel.channel_name, query=query, category=category, kind=kind, count=len(items))
     if not items:
         return f"未找到与「{query}」匹配的资产。"
     lines = [f"找到 {len(items)} 个资产："]
@@ -536,7 +575,9 @@ async def query_enterprises_overview(
                 ["智能制造", "数字化转型"]。支持子串匹配，不需要完全一致。
         limit: 最多返回条数，默认 30，最大建议不超过 50（条数过多会稀释 LLM 注意力）。
     """
+    started = time.perf_counter()
     items = search_overview(city=city, keyword=keyword, themes=themes or [], limit=limit)
+    _log_tool_done("query_enterprises_overview", started, ctx.deps.channel.channel_name, city=city, keyword=keyword, count=len(items))
     return fmt_overview(items)
 
 
@@ -568,7 +609,9 @@ async def get_enterprise_detail(
              与 names 可同时传入，结果取并集。
         fuzzy: 是否对 names 启用模糊匹配，默认 False。用户输入明显有拼写问题时设为 True。
     """
+    started = time.perf_counter()
     items = get_detail(names=names, ids=ids, fuzzy=fuzzy)
+    _log_tool_done("get_enterprise_detail", started, ctx.deps.channel.channel_name, count=len(items), fuzzy=fuzzy)
     return fmt_detail(items)
 
 
@@ -631,7 +674,15 @@ class LLMAgent(BaseAgent):
         else:
             final_prompt = user_input
 
+        run_started = time.perf_counter()
         try:
+            logger.info(
+                "agent_run start channel=%s msg_type=%s history_len=%s prompt_chars=%s",
+                self._channel.channel_name,
+                msg.msg_type.value,
+                len(history),
+                len(final_prompt),
+            )
             result = await self._agent.run(
                 final_prompt,
                 message_history=history,
@@ -639,8 +690,19 @@ class LLMAgent(BaseAgent):
             )
             await self._sessions.set(msg.from_user, result.all_messages())
             reply_text = result.output.strip()
+            logger.info(
+                "agent_run done channel=%s elapsed_ms=%.1f reply_chars=%s history_len=%s",
+                self._channel.channel_name,
+                _elapsed_ms(run_started),
+                len(reply_text),
+                len(result.all_messages()),
+            )
         except Exception:
-            logger.exception("LLM call failed for user %s", msg.from_user)
+            logger.exception(
+                "LLM call failed for user %s elapsed_ms=%.1f",
+                msg.from_user,
+                _elapsed_ms(run_started),
+            )
             reply_text = "抱歉，AI 助手暂时出现了问题，请稍后再试，或回复「转人工」联系人工客服。"
 
         replies: list[ReplyContent] = []

@@ -54,6 +54,10 @@ def _ensure_initialized() -> tuple[KfChannelAdapter, LLMAgent]:
 
 async def _transition_to_ai(open_kfid: str, external_userid: str) -> None:
     """将会话状态切换到「智能助手接待」(state=1)，仅在 state=0 时需要。"""
+    if not get_settings().kf_auto_transition_enabled:
+        logger.debug("KF auto transition disabled, skipping service_state check")
+        return
+
     state_resp = await kf_post(
         "/cgi-bin/kf/service_state/get",
         {"open_kfid": open_kfid, "external_userid": external_userid},

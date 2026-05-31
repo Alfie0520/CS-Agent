@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, File, Form, UploadFile
 
 from app.config import get_settings
-from app.enterprise_data import load_enterprises, save_enterprises
+from app.enterprise_data import get_data_path, load_enterprises, save_enterprises, validate_enterprises
 
 router = APIRouter(prefix="/api/enterprises", tags=["enterprises"])
 
@@ -26,13 +26,19 @@ async def get_enterprise_data(api_key: str | None = None) -> dict[str, Any]:
     if error:
         return error
     items = load_enterprises()
-    return {"success": True, "count": len(items), "items": items}
+    return {
+        "success": True,
+        "count": len(items),
+        "source_path": str(get_data_path()),
+        "items": items,
+    }
 
 
 @router.post("/data")
 async def upload_enterprise_data(
     json_file: UploadFile = File(...),
     api_key: str | None = Form(None),
+    dry_run: bool = Form(False),
 ) -> dict[str, Any]:
     error = _check_api_key(api_key)
     if error:
@@ -43,8 +49,16 @@ async def upload_enterprise_data(
     except Exception as e:
         return {"success": False, "error": f"Invalid JSON: {e}"}
 
-    if not isinstance(data, list):
-        return {"success": False, "error": "Enterprise data must be a JSON array"}
+    try:
+        items = validate_enterprises(data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
-    save_enterprises(data)
-    return {"success": True, "count": len(data)}
+    if not dry_run:
+        save_enterprises(items)
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "count": len(items),
+        "target_path": get_settings().enterprise_data_path,
+    }
