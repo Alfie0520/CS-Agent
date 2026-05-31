@@ -22,7 +22,7 @@ fi
 
 python3 -m json.tool "$ENTERPRISE_JSON" >/dev/null
 curl -fsS -X POST "${API_BASE_URL}/api/enterprises/data" \
-  -F "api_key=${API_KEY}" \
+  -H "X-API-Key: ${API_KEY}" \
   -F "dry_run=${DRY_RUN}" \
   -F "json_file=@${ENTERPRISE_JSON};type=application/json"
 echo

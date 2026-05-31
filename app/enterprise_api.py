@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Header, UploadFile
 
 from app.config import get_settings
 from app.enterprise_data import get_data_path, load_enterprises, save_enterprises, validate_enterprises
@@ -13,16 +13,20 @@ from app.enterprise_data import get_data_path, load_enterprises, save_enterprise
 router = APIRouter(prefix="/api/enterprises", tags=["enterprises"])
 
 
-def _check_api_key(api_key: str | None) -> dict[str, Any] | None:
+def _check_api_key(api_key: str | None, x_api_key: str | None = None) -> dict[str, Any] | None:
     expected_key = get_settings().visit_image_api_key
-    if expected_key and api_key != expected_key:
+    provided_key = api_key or x_api_key
+    if expected_key and provided_key != expected_key:
         return {"success": False, "error": "Invalid API key"}
     return None
 
 
 @router.get("/data")
-async def get_enterprise_data(api_key: str | None = None) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+async def get_enterprise_data(
+    api_key: str | None = None,
+    x_api_key: str | None = Header(None),
+) -> dict[str, Any]:
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
     items = load_enterprises()
@@ -39,8 +43,9 @@ async def upload_enterprise_data(
     json_file: UploadFile = File(...),
     api_key: str | None = Form(None),
     dry_run: bool = Form(False),
+    x_api_key: str | None = Header(None),
 ) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
 

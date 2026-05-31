@@ -69,6 +69,12 @@ class AssetRouterTest(unittest.TestCase):
         self.assertEqual(1, stats.json()["count"])
         self.assertEqual({"16陕西": 1}, stats.json()["categories"])
 
+    def test_stats_accepts_api_key_header(self):
+        response = self.client.get("/api/assets/stats", headers={"X-API-Key": "secret"})
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(True, response.json()["success"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi import APIRouter, File, Form, Header, Query, UploadFile
 
 from app.assets.index import (
     _IMAGE_SUFFIXES,
@@ -20,9 +20,10 @@ from app.config import get_settings
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
 
-def _check_api_key(api_key: str | None) -> dict[str, Any] | None:
+def _check_api_key(api_key: str | None, x_api_key: str | None = None) -> dict[str, Any] | None:
     expected_key = get_settings().visit_image_api_key
-    if expected_key and api_key != expected_key:
+    provided_key = api_key or x_api_key
+    if expected_key and provided_key != expected_key:
         return {"success": False, "error": "Invalid API key"}
     return None
 
@@ -50,8 +51,9 @@ def _atomic_write_bytes(path: Path, content: bytes) -> None:
 async def list_assets(
     kind: str = Query("image"),
     api_key: str | None = Query(None),
+    x_api_key: str | None = Header(None),
 ) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
     _, index_path = _asset_paths()
@@ -65,8 +67,9 @@ async def search_asset_api(
     category: str = Query(""),
     kind: str = Query("image"),
     api_key: str | None = Query(None),
+    x_api_key: str | None = Header(None),
 ) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
     _, index_path = _asset_paths()
@@ -78,8 +81,9 @@ async def search_asset_api(
 async def asset_stats_api(
     kind: str = Query("image"),
     api_key: str | None = Query(None),
+    x_api_key: str | None = Header(None),
 ) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
     _, index_path = _asset_paths()
@@ -96,8 +100,11 @@ async def asset_stats_api(
 
 
 @router.post("/rescan")
-async def rescan_assets_api(api_key: str | None = Form(None)) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+async def rescan_assets_api(
+    api_key: str | None = Form(None),
+    x_api_key: str | None = Header(None),
+) -> dict[str, Any]:
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
     asset_root, index_path = _asset_paths()
@@ -111,8 +118,9 @@ async def upsert_image_asset_api(
     category: str = Form(...),
     image_name: str | None = Form(None),
     api_key: str | None = Form(None),
+    x_api_key: str | None = Header(None),
 ) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
 
@@ -142,8 +150,12 @@ async def upsert_image_asset_api(
 
 
 @router.get("/{asset_id:path}")
-async def get_asset_api(asset_id: str, api_key: str | None = Query(None)) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+async def get_asset_api(
+    asset_id: str,
+    api_key: str | None = Query(None),
+    x_api_key: str | None = Header(None),
+) -> dict[str, Any]:
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
 
@@ -166,8 +178,12 @@ async def get_asset_api(asset_id: str, api_key: str | None = Query(None)) -> dic
 
 
 @router.delete("/{asset_id:path}")
-async def delete_asset_api(asset_id: str, api_key: str | None = Query(None)) -> dict[str, Any]:
-    error = _check_api_key(api_key)
+async def delete_asset_api(
+    asset_id: str,
+    api_key: str | None = Query(None),
+    x_api_key: str | None = Header(None),
+) -> dict[str, Any]:
+    error = _check_api_key(api_key, x_api_key)
     if error:
         return error
 

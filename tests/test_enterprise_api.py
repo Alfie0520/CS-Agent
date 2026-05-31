@@ -82,6 +82,12 @@ class EnterpriseApiTest(unittest.TestCase):
         self.assertEqual(True, fetched.json()["success"])
         self.assertIn("source_path", fetched.json())
 
+    def test_get_accepts_api_key_header(self):
+        response = self.client.get("/api/enterprises/data", headers={"X-API-Key": "secret"})
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(True, response.json()["success"])
+
 
 if __name__ == "__main__":
     unittest.main()

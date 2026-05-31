@@ -73,9 +73,9 @@ curl -X POST https://YOUR_HOST/api/assets/image \
 Useful read APIs:
 
 ```bash
-curl "https://YOUR_HOST/api/assets/search?api_key=API_KEY&query=比亚迪&category=西安"
-curl "https://YOUR_HOST/api/assets/stats?api_key=API_KEY"
-curl "https://YOUR_HOST/api/assets/visit_image:16陕西:西安比亚迪（展厅）?api_key=API_KEY"
+curl -H "X-API-Key: API_KEY" "https://YOUR_HOST/api/assets/search?query=比亚迪&category=西安"
+curl -H "X-API-Key: API_KEY" "https://YOUR_HOST/api/assets/stats"
+curl -H "X-API-Key: API_KEY" "https://YOUR_HOST/api/assets/visit_image:16陕西:西安比亚迪（展厅）"
 ```
 
 Uploads reject empty files, path-like file names, and unsupported image suffixes.
