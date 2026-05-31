@@ -37,10 +37,10 @@ def compress_image_if_needed(
         else:
             img = img.convert("RGB")
 
-        work = img
+        work = _resize_to_max_side(img, 1600)
         while True:
             best_bytes: bytes | None = None
-            for quality in (85, 75, 65, 55, 45, 35, 28, 22):
+            for quality in (78, 68, 58, 48, 38, 30):
                 encoded = _encode_jpeg(work, quality)
                 best_bytes = encoded
                 if len(encoded) <= target_bytes:
@@ -66,3 +66,13 @@ def _encode_jpeg(image: Image.Image, quality: int) -> bytes:
     buf = BytesIO()
     image.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
     return buf.getvalue()
+
+
+def _resize_to_max_side(image: Image.Image, max_side: int) -> Image.Image:
+    width, height = image.size
+    current_max = max(width, height)
+    if current_max <= max_side:
+        return image
+    scale = max_side / current_max
+    next_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+    return image.resize(next_size, Image.Resampling.LANCZOS)
