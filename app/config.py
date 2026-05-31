@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # 企业微信内部群机器人通知
     wework_bot_webhook_url: str = ""
     wework_bot_keyword: str = "CS-Agent"
+    # 飞书内部群机器人通知。优先级高于 WEWORK_BOT_WEBHOOK_URL。
+    feishu_bot_webhook_url: str = ""
 
     # 参访图片 API 访问密钥
     visit_image_api_key: str = ""

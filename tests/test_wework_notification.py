@@ -27,6 +27,27 @@ class WeWorkNotificationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("CS-Agent", calls[0][1]["text"]["content"])
         self.assertIn("客户要报价", calls[0][1]["text"]["content"])
 
+    async def test_send_text_uses_feishu_payload_for_feishu_webhook(self):
+        from app.notification.wework_bot import send_wework_bot_text
+
+        calls = []
+
+        async def post_json(url, payload):
+            calls.append((url, payload))
+            return {"code": 0, "msg": "success"}
+
+        result = await send_wework_bot_text(
+            "新线索：客户要报价",
+            webhook_url="https://open.feishu.cn/open-apis/bot/v2/hook/test",
+            keyword="CS-Agent",
+            post_json=post_json,
+        )
+
+        self.assertEqual(True, result["success"])
+        self.assertEqual("text", calls[0][1]["msg_type"])
+        self.assertIn("CS-Agent", calls[0][1]["content"]["text"])
+        self.assertIn("客户要报价", calls[0][1]["content"]["text"])
+
     async def test_notify_slash_command_sends_test_message_without_llm(self):
         os.environ["WECHAT_APP_ID"] = "test-app-id"
         os.environ["WECHAT_APP_SECRET"] = "test-app-secret"

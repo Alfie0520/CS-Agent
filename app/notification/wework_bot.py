@@ -28,6 +28,22 @@ async def _post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         return response.json()
 
 
+def _is_feishu_webhook(url: str) -> bool:
+    return "open.feishu.cn/open-apis/bot/" in url or "open.larksuite.com/open-apis/bot/" in url
+
+
+def _build_payload(url: str, content: str) -> dict[str, Any]:
+    if _is_feishu_webhook(url):
+        return {"msg_type": "text", "content": {"text": content}}
+    return {"msgtype": "text", "text": {"content": content}}
+
+
+def _is_success_response(url: str, data: dict[str, Any]) -> bool:
+    if _is_feishu_webhook(url):
+        return data.get("code", 0) == 0
+    return data.get("errcode", 0) == 0
+
+
 async def send_wework_bot_text(
     content: str,
     *,
@@ -37,7 +53,7 @@ async def send_wework_bot_text(
 ) -> dict[str, Any]:
     if webhook_url is None or keyword is None:
         settings = get_settings()
-        target_url = (webhook_url or settings.wework_bot_webhook_url).strip()
+        target_url = (webhook_url or settings.feishu_bot_webhook_url or settings.wework_bot_webhook_url).strip()
         bot_keyword = keyword if keyword is not None else settings.wework_bot_keyword
     else:
         target_url = webhook_url.strip()
@@ -46,10 +62,10 @@ async def send_wework_bot_text(
         return {"success": False, "errcode": -1, "errmsg": "WEWORK_BOT_WEBHOOK_URL is not configured"}
 
     final_content = ensure_keyword(content, bot_keyword)
-    payload = {"msgtype": "text", "text": {"content": final_content}}
+    payload = _build_payload(target_url, final_content)
     sender = post_json or _post_json
     data = await sender(target_url, payload)
-    success = data.get("errcode", 0) == 0
+    success = _is_success_response(target_url, data)
     if not success:
         logger.warning("wework bot notify failed: %s", data)
     return {"success": success, **data}
