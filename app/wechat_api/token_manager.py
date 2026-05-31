@@ -50,8 +50,13 @@ class TokenManager:
             f"&appid={settings.wechat_app_id}"
             f"&secret={settings.wechat_app_secret}"
         )
+        client = self._client
+        close_after = False
+        if client is None:
+            client = httpx.AsyncClient(timeout=10)
+            close_after = True
         try:
-            resp = await self._client.get(url)
+            resp = await client.get(url)
             data = resp.json()
             if "access_token" in data:
                 self._token = data["access_token"]
@@ -62,6 +67,9 @@ class TokenManager:
                 logger.error("Failed to get access token: %s", data)
         except Exception:
             logger.exception("Error fetching access token")
+        finally:
+            if close_after:
+                await client.aclose()
 
     async def _auto_refresh_loop(self) -> None:
         """每隔 (expires_in - buffer) 秒自动刷新 token。"""
