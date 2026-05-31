@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # 对话历史保留时长（秒），0 = 永不过期
     session_ttl: int = 0
 
+    # 企业微信内部群机器人通知
+    wework_bot_webhook_url: str = ""
+    wework_bot_keyword: str = "CS-Agent"
+
     # 参访图片 API 访问密钥
     visit_image_api_key: str = ""
 

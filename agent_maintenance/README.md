@@ -130,6 +130,10 @@ See `agent_maintenance/API.md`.
 
 ## Troubleshooting
 
+- To verify the internal colleague-notification bot after configuring
+  `WEWORK_BOT_WEBHOOK_URL`, send `/notify test` to the public account or WeChat
+  customer-service channel. The current chat should reply `通知测试已发送。`, and
+  the internal group should receive a `CS-Agent` test message.
 - If a search misses an image, check both the category and filename. Search now
   matches category, filename, enterprise names, asset id, and path.
 - If an enterprise upload fails, read the validation error. Required fields are

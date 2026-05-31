@@ -20,6 +20,7 @@ from app.channel.base import ChannelAdapter
 from app.config import get_settings
 from app.enterprise_data import fmt_detail, fmt_overview, get_detail, search_overview
 from app.models.message import AgentResponse, EventType, IncomingMessage, MsgType, ReplyContent
+from app.notification.wework_bot import build_colleague_notification, send_wework_bot_text
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +320,50 @@ async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
         _log_tool_done("push_message", started, ctx.deps.channel.channel_name, error=type(e).__name__)
         logger.warning("push_message failed for %s: %s", ctx.deps.user_id, e)
         return f"推送失败：{e}"
+
+
+@_pydantic_agent.tool
+async def notify_colleague(
+    ctx: RunContext[UserDeps],
+    reason: str,
+    summary: str,
+    recommended_action: str = "",
+    urgency: str = "normal",
+) -> str:
+    """通知内部同事跟进高转化或需要人工介入的客户。
+
+    适用场景：
+    - 用户询问报价、预算、成团人数、具体出行时间、付款或合同。
+    - 用户已明确企业、城市、人数、时间等关键线索。
+    - 用户是渠道方，需要三方会客、人工承接或快速响应。
+    - Agent 无法可靠回答，需要人类同事介入。
+
+    Args:
+        reason: 触发通知的原因。
+        summary: 对用户诉求和上下文的简短摘要。
+        recommended_action: 建议同事下一步做什么。
+        urgency: 紧急程度，如 normal/high/urgent。
+    """
+    started = time.perf_counter()
+    content = build_colleague_notification(
+        channel=ctx.deps.channel.channel_name,
+        user_id=ctx.deps.user_id,
+        reason=reason,
+        summary=summary,
+        recommended_action=recommended_action,
+        urgency=urgency,
+    )
+    result = await send_wework_bot_text(content)
+    _log_tool_done(
+        "notify_colleague",
+        started,
+        ctx.deps.channel.channel_name,
+        success=result.get("success"),
+        urgency=urgency,
+    )
+    if result.get("success"):
+        return "已通知同事跟进。"
+    return f"通知同事失败：{result.get('errmsg', result)}"
 
 
 @_pydantic_agent.tool
@@ -660,6 +705,26 @@ class LLMAgent(BaseAgent):
         if user_input.strip() == "/clearsession":
             await self._sessions.clear(msg.from_user)
             return AgentResponse(replies=[ReplyContent(msg_type="text", text="对话历史已清空。")])
+
+        if user_input.startswith("/notify"):
+            note = user_input.removeprefix("/notify").strip() or "测试消息"
+            content = (
+                "CS-Agent /notify 测试消息\n\n"
+                f"渠道：{self._channel.channel_name}\n"
+                f"用户 ID：{msg.from_user}\n"
+                f"内容：{note}"
+            )
+            result = await send_wework_bot_text(content)
+            if result.get("success"):
+                return AgentResponse(replies=[ReplyContent(msg_type="text", text="通知测试已发送。")])
+            return AgentResponse(
+                replies=[
+                    ReplyContent(
+                        msg_type="text",
+                        text=f"通知测试发送失败：{result.get('errmsg', result)}",
+                    )
+                ]
+            )
 
         # 组装本次发给 LLM 的最终 prompt
         # 如果是测试命令模式，跳过 strict_rules，并强制附加执行指令，同时清空历史上下文
