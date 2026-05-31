@@ -63,6 +63,10 @@ async def delete_material_image(media_id: str) -> dict[str, Any]:
 
 async def get_material_image(media_id: str) -> dict[str, Any]:
     """根据永久素材 media_id 下载图片内容。"""
+    return await _get_material_image(media_id, retry_on_token_error=True)
+
+
+async def _get_material_image(media_id: str, retry_on_token_error: bool) -> dict[str, Any]:
     token = await token_manager.get_token()
     settings = get_settings()
     url = f"{settings.wechat_api_base_url}{_GET_MATERIAL_PATH}?access_token={token}"
@@ -72,12 +76,21 @@ async def get_material_image(media_id: str) -> dict[str, Any]:
     content_type = resp.headers.get("content-type", "")
     if "application/json" in content_type:
         try:
-            return resp.json()
+            data = resp.json()
         except Exception:
             return {"errcode": -1, "errmsg": resp.text}
+        if retry_on_token_error and _is_token_error(data):
+            await token_manager._fetch_token()
+            return await _get_material_image(media_id, retry_on_token_error=False)
+        return data
 
     return {
         "content": resp.content,
         "content_type": content_type,
         "status_code": resp.status_code,
     }
+
+
+def _is_token_error(data: dict[str, Any]) -> bool:
+    errmsg = str(data.get("errmsg", "")).lower()
+    return data.get("errcode") in {40001, 40014, 42001} or "access_token" in errmsg

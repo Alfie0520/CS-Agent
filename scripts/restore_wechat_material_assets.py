@@ -29,7 +29,13 @@ def main() -> None:
         threshold_bytes=args.threshold_bytes,
         target_bytes=args.target_bytes,
     )
-    print(result)
+    print({
+        "restored": result.get("restored", 0),
+        "already_exists": result.get("already_exists", 0),
+        "skipped_count": len(result.get("skipped", [])),
+        "asset_count": result.get("asset_count", 0),
+        "skip_reasons": sorted({x.get("reason", "")[:120] for x in result.get("skipped", [])}),
+    })
 
 
 if __name__ == "__main__":
