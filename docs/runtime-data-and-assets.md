@@ -62,3 +62,25 @@ curl -X POST https://YOUR_HOST/api/assets/image \
 The agent searches image assets by `asset_id` and sends them through
 `send_asset(asset_id)`. The delivery layer uploads temporary media to the active
 channel and caches `media_id` by `asset_id + sha256 + channel`.
+
+## Restoring From Existing WeChat Permanent Media
+
+If local image files are lost but the old `/data/media_index.json` still has
+official-account permanent `media_id` values, restore them on the server:
+
+```bash
+python3 scripts/restore_wechat_material_assets.py \
+  --media-index /data/media_index.json \
+  --asset-root /data/cs-agent-assets \
+  --asset-index /data/cs-agent-assets/asset_index.json
+```
+
+The script downloads each permanent image through the official-account material
+API and writes it to:
+
+```text
+/data/cs-agent-assets/images/{category}/{image_name}
+```
+
+Images larger than 1 MB are converted to JPEG and compressed toward 200 KB
+before the asset index is regenerated.
