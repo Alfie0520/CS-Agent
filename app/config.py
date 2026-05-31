@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     # 动态提示词配置
     prompt_base_role_path: str = "app/prompts/base_role.md"
     prompt_strict_rules_path: str = "app/prompts/strict_rules.md"
-    # 公司老板微信二维码 media_id（用于 get_wechat_qr_code 工具）
+    # 公司老板微信二维码资产 ID（优先使用；用于跨微信公众号/微信客服发送）
+    wechat_qr_code_asset_id: str = ""
+    # 公司老板微信二维码 media_id（兼容旧配置，仅作为兜底）
     wechat_qr_code_media_id: str = ""
 
     # 多轮对话历史 SQLite 存储路径

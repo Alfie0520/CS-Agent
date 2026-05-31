@@ -175,16 +175,16 @@ async def list_visit_schemes(ctx: RunContext[UserDeps], category: str = "") -> s
 async def push_image(ctx: RunContext[UserDeps], media_id: str) -> str:
     """立即向用户发送一张图片。
 
-    查到参访方案或二维码的 media_id 后，调用此工具将图片直接发给用户。
-    多个方案时逐个调用，每次传一个 media_id，图片会按顺序依次发出。
+    兼容旧的微信 media_id 发送逻辑。参访方案、二维码等业务图片优先使用
+    send_asset 或 send_wechat_qr_code，避免不同渠道的 media_id 不通用。
 
     业务逻辑：
-    - 先调查询工具（search_visit_scheme / get_wechat_qr_code）确认 media_id 存在
+    - 先调查询工具确认 media_id 存在
     - 确认有结果后再调此工具发图，不要在未查询前假设有图片
     - 多个方案都需要发送时，循环调用此工具，每张图单独调一次
 
     Args:
-        media_id: 图片的 media_id，从 search_visit_scheme 或 get_wechat_qr_code 获取。
+        media_id: 当前渠道可用的图片 media_id。
     """
     try:
         await ctx.deps.channel.send_image(ctx.deps.user_id, media_id)
@@ -221,6 +221,54 @@ async def send_asset(ctx: RunContext[UserDeps], asset_id: str) -> str:
         _log_tool_done("send_asset", started, ctx.deps.channel.channel_name, asset_id=asset_id, error=type(e).__name__)
         logger.warning("send_asset failed for %s asset=%s: %s", ctx.deps.user_id, asset_id, e)
         return f"资产发送失败：{e}"
+
+
+@_pydantic_agent.tool
+async def send_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
+    """立即向用户发送公司老板微信二维码。
+
+    当用户询问加微信、联系负责人、商务合作、人工对接、报价、预算、合同、付款等
+    高转化问题时，优先调用此工具。工具内部会根据当前渠道自动选择可用发送方式。
+    """
+    started = time.perf_counter()
+    settings = get_settings()
+    asset_id = (settings.wechat_qr_code_asset_id or "").strip()
+    if asset_id:
+        service = AssetDeliveryService(
+            asset_root=settings.asset_root_path,
+            index_path=settings.asset_index_path,
+            cache_path=settings.asset_delivery_cache_path,
+        )
+        try:
+            result = await service.send_asset(ctx.deps.channel, ctx.deps.user_id, asset_id)
+            _log_tool_done("send_wechat_qr_code", started, ctx.deps.channel.channel_name, asset_id=asset_id)
+            if result.get("errcode", 0) == 0:
+                return "老板微信二维码已发送。"
+            return f"老板微信二维码发送失败：{result.get('errmsg', result)}"
+        except Exception as e:
+            _log_tool_done(
+                "send_wechat_qr_code",
+                started,
+                ctx.deps.channel.channel_name,
+                asset_id=asset_id,
+                error=type(e).__name__,
+            )
+            logger.warning("send_wechat_qr_code failed for %s asset=%s: %s", ctx.deps.user_id, asset_id, e)
+            return f"老板微信二维码发送失败：{e}"
+
+    media_id = (settings.wechat_qr_code_media_id or "").strip()
+    if not media_id:
+        return "老板微信二维码未配置，请联系管理员设置 WECHAT_QR_CODE_ASSET_ID。"
+    try:
+        result = await ctx.deps.channel.send_image(ctx.deps.user_id, media_id)
+        _log_tool_done("send_wechat_qr_code", started, ctx.deps.channel.channel_name, fallback="media_id")
+        if result.get("errcode", 0) == 0:
+            return "老板微信二维码已发送。"
+        return f"老板微信二维码发送失败：{result.get('errmsg', result)}"
+    except Exception as e:
+        _log_tool_done("send_wechat_qr_code", started, ctx.deps.channel.channel_name, fallback="media_id", error=type(e).__name__)
+        logger.warning("send_wechat_qr_code fallback failed for %s: %s", ctx.deps.user_id, e)
+        return f"老板微信二维码发送失败：{e}"
 
 
 @_pydantic_agent.tool
@@ -368,19 +416,22 @@ async def notify_colleague(
 
 @_pydantic_agent.tool
 async def get_wechat_qr_code(ctx: RunContext[UserDeps]) -> str:
-    """获取公司老板微信二维码的 media_id，用于发送给用户添加好友。
+    """获取公司老板微信二维码配置，用于发送给用户添加好友。
 
     调用时机：
     1. 当用户询问如何联系、加微信、咨询对接、商务合作、想和负责人沟通时。
     2. 当用户询问具体报价，或即将交付成单的转化时机时（用于承接转化，避免 AI 幻觉报价）。
     
-    获取到 media_id 后，调用 push_image(media_id) 将二维码图片发给用户。
+    优先直接调用 send_wechat_qr_code 完成发送。
     """
     settings = get_settings()
+    asset_id = (settings.wechat_qr_code_asset_id or "").strip()
+    if asset_id:
+        return f"公司老板微信二维码 asset_id={asset_id}，请调用 send_wechat_qr_code 直接发送给用户。"
     media_id = (settings.wechat_qr_code_media_id or "").strip()
     if not media_id:
-        return "微信二维码未配置，请联系管理员在 .env 中设置 WECHAT_QR_CODE_MEDIA_ID。"
-    return f"公司老板微信二维码 media_id={media_id}，请调用 push_image 将二维码发给用户。"
+        return "微信二维码未配置，请联系管理员在 .env 中设置 WECHAT_QR_CODE_ASSET_ID。"
+    return f"公司老板微信二维码 media_id={media_id}，请调用 send_wechat_qr_code 直接发送给用户。"
 
 
 @_pydantic_agent.tool
