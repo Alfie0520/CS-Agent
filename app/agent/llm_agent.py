@@ -203,6 +203,65 @@ async def send_asset(ctx: RunContext[UserDeps], asset_id: str) -> str:
 
 
 @_pydantic_agent.tool
+async def send_visit_scheme_assets(
+    ctx: RunContext[UserDeps],
+    query: str,
+    category: str = "",
+    max_items: int = 2,
+) -> str:
+    """搜索并立即发送参访方案图片。
+
+    用户明确要「方案图」「有图吗」「发图片看看」时优先调用此工具，它会一次完成
+    搜索 asset_id、上传/复用 media_id、发送图片，减少多轮等待。
+
+    Args:
+        query: 企业名称关键词，如「西安比亚迪」「比亚迪」「华为」。
+        category: 地区过滤关键词，如「西安」「陕西」「深圳」。用户明确提到地区时必须填写。
+        max_items: 最多发送几张图。用户说「随便看看」默认 1；明确要某企业全部方案时可用 2。
+    """
+    settings = get_settings()
+    items = search_asset_records(
+        settings.asset_index_path,
+        query=query,
+        category=category,
+        kind="image",
+    )
+    if not items:
+        hint = f"（地区「{category}」）" if category else ""
+        return f"未找到与「{query}」{hint}匹配的参访方案图片。"
+
+    limit = max(1, min(int(max_items or 1), 5))
+    service = AssetDeliveryService(
+        asset_root=settings.asset_root_path,
+        index_path=settings.asset_index_path,
+        cache_path=settings.asset_delivery_cache_path,
+    )
+    sent: list[str] = []
+    failed: list[str] = []
+    for item in items[:limit]:
+        asset_id = item.get("asset_id", "")
+        try:
+            result = await service.send_asset(ctx.deps.channel, ctx.deps.user_id, asset_id)
+        except Exception as e:
+            logger.warning("send_visit_scheme_assets failed for %s asset=%s: %s", ctx.deps.user_id, asset_id, e)
+            failed.append(f"{item.get('name', asset_id)}：{e}")
+            continue
+        if result.get("errcode", 0) == 0:
+            sent.append(f"{item.get('name', '')}（{item.get('category', '')}）")
+        else:
+            failed.append(f"{item.get('name', asset_id)}：{result.get('errmsg', result)}")
+
+    lines: list[str] = []
+    if sent:
+        lines.append(f"已发送 {len(sent)} 张方案图：" + "、".join(sent))
+    if len(items) > limit:
+        lines.append(f"另有 {len(items) - limit} 张匹配图片未发送，可按用户需要继续发送。")
+    if failed:
+        lines.append("发送失败：" + "；".join(failed))
+    return "\n".join(lines) if lines else "未发送任何图片。"
+
+
+@_pydantic_agent.tool
 async def push_message(ctx: RunContext[UserDeps], content: str) -> str:
     """立即向用户推送一条消息，无需等待当前回复完成。
 

@@ -103,12 +103,29 @@ def search_assets(
         result = [
             x
             for x in result
-            if q in (x.get("name") or "")
-            or any(q in name for name in x.get("enterprise_names", []))
+            if _asset_matches_text(x, q, fields=("name", "enterprise_names"))
         ]
     if c:
-        result = [x for x in result if c in (x.get("category") or "")]
+        result = [
+            x
+            for x in result
+            if _asset_matches_text(
+                x,
+                c,
+                fields=("category", "name", "enterprise_names", "asset_id", "path"),
+            )
+        ]
     return result
+
+
+def _asset_matches_text(asset: dict[str, Any], text: str, fields: tuple[str, ...]) -> bool:
+    for field in fields:
+        value = asset.get(field)
+        if isinstance(value, str) and text in value:
+            return True
+        if isinstance(value, list) and any(text in str(item) for item in value):
+            return True
+    return False
 
 
 def get_asset(index_path: str | Path, asset_id: str) -> dict[str, Any] | None:

@@ -50,6 +50,19 @@ class AssetIndexTest(unittest.TestCase):
         self.assertEqual(first["asset_id"], second["asset_id"])
         self.assertNotEqual(first["sha256"], second["sha256"])
 
+    def test_category_filter_also_matches_asset_name(self):
+        from app.assets.index import build_image_asset_index, save_asset_index, search_assets
+
+        image_path = self.images_root / "16陕西" / "西安比亚迪（展厅）.png"
+        image_path.parent.mkdir(parents=True)
+        image_path.write_bytes(b"image-v1")
+        save_asset_index(build_image_asset_index(self.images_root), self.index_path)
+
+        results = search_assets(self.index_path, query="比亚迪", category="西安")
+
+        self.assertEqual(1, len(results))
+        self.assertEqual("西安比亚迪（展厅）", results[0]["name"])
+
 
 if __name__ == "__main__":
     unittest.main()

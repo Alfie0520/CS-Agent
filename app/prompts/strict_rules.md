@@ -11,9 +11,13 @@
 
 ## 发图规则
 
-只要本轮给用户介绍了某企业（详情、价值说明、对比推荐），必须紧接着搜图并发图——调 `search_visit_scheme` 取 asset_id，再调 `send_asset` 发送，不要等用户主动开口要。
+用户明确要"方案图"、"有图吗"、"发图片看看"、"给个方案看看"时，优先调用 `send_visit_scheme_assets`，一次完成搜索和发送，减少用户等待；只有需要先让用户选择多个候选时，才先调 `search_visit_scheme`。
 
-用户指定了地区时（如"深圳的华为"），调 `search_visit_scheme` 必须同时传 `category` 参数（如 `category="深圳"`），防止发出同名不同地区的错误方案。
+用户说"随便给个看看"时默认只发 1 张图；用户明确要某企业的多个方案图时，最多先发 2 张，避免短时间消息过多。
+
+只要本轮给用户介绍了某企业（详情、价值说明、对比推荐），必须紧接着搜图并发图——可优先调 `send_visit_scheme_assets` 一次完成；如需先看候选，再调 `search_visit_scheme` 取 asset_id，随后调 `send_asset` 发送。不要等用户主动开口要。
+
+用户指定了地区时（如"深圳的华为"、"西安比亚迪"），调 `send_visit_scheme_assets` 或 `search_visit_scheme` 必须同时传 `category` 参数（如 `category="深圳"`、`category="西安"`），防止发出同名不同地区的错误方案。
 
 ## 业务红线
 
