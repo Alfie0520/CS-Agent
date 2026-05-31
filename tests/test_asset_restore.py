@@ -54,6 +54,7 @@ class AssetRestoreTest(unittest.TestCase):
         )
 
         self.assertEqual(1, result["restored"])
+        self.assertEqual(0, result["already_exists"])
         self.assertTrue((asset_root / "images" / "广东-深圳" / "华为.png").exists())
         assets = json.loads(asset_index.read_text(encoding="utf-8"))
         self.assertEqual("visit_image:广东-深圳:华为", assets[0]["asset_id"])

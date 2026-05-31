@@ -46,6 +46,7 @@ async def _restore_assets_from_media_index_async(
 ) -> dict[str, Any]:
     items = json.loads(media_index_path.read_text(encoding="utf-8"))
     restored = 0
+    already_exists = 0
     skipped: list[dict[str, str]] = []
 
     for item in items if isinstance(items, list) else []:
@@ -62,29 +63,42 @@ async def _restore_assets_from_media_index_async(
             skipped.append({"media_id": media_id, "reason": str(e)})
             continue
 
-        result = await download_material(media_id)
-        content = result.get("content")
-        if not isinstance(content, (bytes, bytearray)):
-            skipped.append({"media_id": media_id, "reason": str(result.get("errmsg") or result)})
+        if target_path.exists() or target_path.with_suffix(".jpg").exists():
+            already_exists += 1
             continue
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            suffix = target_path.suffix or _suffix_from_content_type(result.get("content_type", ""))
-            raw_path = Path(tmpdir) / f"raw{suffix}"
-            raw_path.write_bytes(bytes(content))
-            final_path = target_path
-            if raw_path.stat().st_size > threshold_bytes:
-                final_path = target_path.with_suffix(".jpg")
-            _atomic_replace_image(
-                raw_path=raw_path,
-                target_path=final_path,
-                threshold_bytes=threshold_bytes,
-                target_bytes=target_bytes,
-            )
+        try:
+            result = await download_material(media_id)
+            content = result.get("content")
+            if not isinstance(content, (bytes, bytearray)):
+                skipped.append({"media_id": media_id, "reason": str(result.get("errmsg") or result)})
+                continue
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                suffix = target_path.suffix or _suffix_from_content_type(result.get("content_type", ""))
+                raw_path = Path(tmpdir) / f"raw{suffix}"
+                raw_path.write_bytes(bytes(content))
+                final_path = target_path
+                if raw_path.stat().st_size > threshold_bytes:
+                    final_path = target_path.with_suffix(".jpg")
+                _atomic_replace_image(
+                    raw_path=raw_path,
+                    target_path=final_path,
+                    threshold_bytes=threshold_bytes,
+                    target_bytes=target_bytes,
+                )
+        except Exception as e:
+            skipped.append({"media_id": media_id, "reason": str(e)})
+            continue
         restored += 1
 
     assets = rescan_image_assets(asset_root, asset_index_path)
-    return {"restored": restored, "skipped": skipped, "asset_count": len(assets)}
+    return {
+        "restored": restored,
+        "already_exists": already_exists,
+        "skipped": skipped,
+        "asset_count": len(assets),
+    }
 
 
 def _target_image_path(asset_root: Path, category: str, image_name: str) -> Path:

@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageFile, ImageOps
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 def compress_image_if_needed(
