@@ -227,21 +227,43 @@ python3 scripts/enterprise_db/build_enterprise_db.py
 3. 生成 JSON 文件到 `app/data/enterprises.json`
 4. 输出记录数量
 
-#### 步骤4：同步到远程服务器
-由于服务器上的 `enterprises.json` 是独立部署的，需要手动同步：
+#### 步骤4：发布到远程服务器（关键步骤）
+
+> ⚠️ **不要**直接 `git pull` 或 `scp` 把 `app/data/enterprises.json` 推到服务器！
+>
+> 服务实际加载的运行时数据路径是 **`/data/cs-agent-data/enterprises.json`**（在 `app/config.py:44` 配置），
+> 跟代码内置的 `app/data/enterprises.json` 是**两份独立的数据**。只改 `git` 仓库那份，
+> 服务读到的还是旧数据（历史上因此翻车过，6 月 5 日之后的新增企业全部查不到）。
+>
+> 正确做法是调用 HTTP API `/api/enterprises/data`（API 内部会把数据写入运行时路径）：
 
 ```bash
-ssh ubuntu@43.129.183.181
-cd /opt/CS-Agent && git pull origin main
+# 必须设置这两个环境变量
+export CS_AGENT_BASE_URL="https://43.129.183.181"
+export CS_AGENT_API_KEY="<从运维获取>"
+
+# 1) 先 dry-run 验证（推荐）
+./agent_maintenance/scripts/validate_enterprises.sh app/data/enterprises.json
+
+# 2) 验证通过后再正式发布
+./agent_maintenance/scripts/publish_enterprises.sh app/data/enterprises.json
+```
+
+或者一行搞定 build + validate + publish：
+
+```bash
+./agent_maintenance/scripts/update_enterprises.sh \
+  scripts/enterprise_db/data/2026游学资源表.xlsx
 ```
 
 #### 步骤5：验证结果
 脚本会输出类似：
 ```
-完成：共写入 404 条企业数据 → /Users/alfie/vibe_coding/CS-Agent/app/data/enterprises.json
+完成：共写入 415 条企业数据 → /Users/alfie/vibe_coding/CS-Agent/app/data/enterprises.json
+{"success": true, "count": 415, "source_path": "/data/cs-agent-data/enterprises.json"}
 ```
 
-可以对比新旧版本的差异：
+可以对比新旧版本的差异，并 curl 服务器看运行时数据是否已更新：
 
 ```python
 import json
@@ -249,9 +271,14 @@ import json
 with open('app/data/enterprises.json') as f:
     new = json.load(f)
 
-# 检查新增的企业
-print(f"总记录数: {len(new)}")
+print(f"本地记录数: {len(new)}")
 print(f"最新ID: {max(e['id'] for e in new)}")
+```
+
+```bash
+# 看运行时数据是否已更新
+curl -fsS -H "X-API-Key: $CS_AGENT_API_KEY" \
+  "$CS_AGENT_BASE_URL/api/enterprises/data" | python3 -c "import sys,json; d=json.load(sys.stdin); print('远端记录数:', d['count'])"
 ```
 
 ---
@@ -312,9 +339,11 @@ python3 scripts/image_ops/batch_image_operations.py
 # 企业数据更新（本地）
 python3 scripts/enterprise_db/build_enterprise_db.py
 
-# 同步到服务器
-ssh ubuntu@43.129.183.181
-cd /opt/CS-Agent && git pull origin main
+# 发布到服务器（自动写运行时数据）
+./agent_maintenance/scripts/publish_enterprises.sh app/data/enterprises.json
+
+# 一行完成：build + validate + publish
+./agent_maintenance/scripts/update_enterprises.sh scripts/enterprise_db/data/2026游学资源表.xlsx
 
 # SSH 连接服务器
 ssh ubuntu@43.129.183.181
