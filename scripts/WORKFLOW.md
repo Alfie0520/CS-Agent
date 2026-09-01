@@ -126,57 +126,100 @@ for cat, count in sorted(categories.items()):
 - 如果图片中的企业在 `enterprises.json` 中已存在，category 通常与该企业的城市对应
 - 如果不确定 category，可以先在服务器上搜索同名企业的记录
 
-#### 步骤4：配置 ops.json
-在 `scripts/image_ops/data/ops.json` 中配置操作：
+#### 步骤4：把图片放到正确的子目录 + 自动生成 ops.json
+
+**不要手编 ops.json**，让 agent 跑 `plan` 命令自动生成：
+
+```
+scripts/image_ops/data/images/
+├── 11山东/          ← 子目录名 = category
+│   ├── 潍柴动力.png
+│   └── 福瑞达.png
+├── 16陕西/
+│   └── 中科西光航天.png
+├── 广东-东莞/
+│   ├── 徐福记透明工厂.png
+│   └── 厨邦博览馆.png
+├── 02上海/
+│   └── 振华重工.png
+└── 15安徽/
+    ├── 国轩高科.png
+    └── 国盾量子.png
+```
+
+> ⚠️ 图必须放在子目录里，**子目录名 = category**。如果直接放在 `images/` 根目录，`plan` 会拒绝（无法推断 category）。
+
+**生成 ops.json 草稿：**
+
+```bash
+python3 scripts/image_ops/batch_image_operations.py plan
+```
+
+`plan` 子命令会：
+1. 扫描 `data/images/` 下的子目录和图片
+2. 拉取服务器 `/data/media_index.json` 对账
+3. **同名同 category → 自动生成 `update` + 填入现有 `media_id`**
+4. **本地新增 → 自动生成 `create`**
+5. **服务器有但本地无 → 列在 `stale_on_server`，不自动生成 delete（避免误删）**
+6. 保留 ops.json 里现有的 `delete` 操作（防止 plan 误覆盖）
+7. 写入 `scripts/image_ops/data/ops.json`
+
+**生成的 ops.json 长这样：**
 
 ```json
 {
   "operations": [
     {
       "operation": "create",
-      "image_path": "images/杭州/兔宝宝.png",
-      "image_name": "兔宝宝.png",
-      "category": "05浙江"
+      "image_path": "images/16陕西/中科西光航天.png",
+      "image_name": "中科西光航天.png",
+      "category": "16陕西",
+      "_reason": "本地新增 -> 上传到微信"
     },
     {
       "operation": "update",
-      "image_path": "images/广东-深圳/华为更新.png",
-      "image_name": "华为.png",
-      "category": "广东-深圳",
-      "media_id": "原有的media_id"
-    },
+      "image_path": "images/11山东/潍柴动力.png",
+      "image_name": "潍柴动力.png",
+      "category": "11山东",
+      "media_id": "Ef5Dol7F8P0PVnRRbx519NbVvONXuyQ2qHDc9FqT2Ni4ADV-GBnrBMo6jS-32yo8",
+      "_reason": "同名同 category, 服务器已存在 -> 覆盖"
+    }
+  ],
+  "stale_on_server": [
     {
-      "operation": "delete",
-      "media_id": "要删除的media_id"
+      "image_name": "京东亚洲一号.png",
+      "category": "广东-东莞",
+      "media_id": "...",
+      "_reason": "服务器有, 本地无 -> 如要删除请手动加 delete 操作"
     }
   ]
 }
 ```
 
-**operation 字段说明**：
-| operation | 必填字段 | 说明 |
-|-----------|---------|------|
-| `create` | `image_path`, `image_name`, `category` | 上传新图片到微信素材库 |
-| `update` | `image_path`, `image_name`, `category`, `media_id` | 更新已存在的图片 |
-| `delete` | `media_id` | 从微信素材库删除图片 |
+**如果需要删除某张图**（即 `stale_on_server` 中的某条），手动在 `operations` 数组里加一条：
 
-**字段说明**：
-- `image_path`：相对于 `scripts/image_ops/data/` 目录的路径
-- `image_name`：图片在微信素材库中的名称
-- `category`：分类，用于组织和标识
-- `media_id`：微信素材的唯一标识，从服务器获取
+```json
+{
+  "operation": "delete",
+  "media_id": "Ef5Do..."
+}
+```
 
-#### 步骤5：运行脚本
+#### 步骤5：检查 ops.json 后执行
 ```bash
-cd /path/to/CS-Agent
-python3 scripts/image_ops/batch_image_operations.py
+# 看一眼 ops.json 当前内容
+python3 scripts/image_ops/batch_image_operations.py show
+
+# 确认无误后执行
+python3 scripts/image_ops/batch_image_operations.py run
 ```
 
 **脚本行为**：
 1. 读取 `ops.json` 配置
 2. 对每张图片进行压缩（目标 200KB 以内）
-3. 调用远程 API 执行操作
-4. 输出执行结果
+3. 调用远程 API 上传/更新/删除（`/api/visit-image`）
+4. 对 create/update，**额外**调 `/api/assets/image` 同步本地资产库（让 agent 能搜到）
+5. 输出执行结果
 
 #### 步骤6：验证服务器结果
 再次连接服务器，检查 `media_index.json` 是否正确更新：

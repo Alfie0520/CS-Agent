@@ -166,6 +166,173 @@ def resolve_image_path(relative_path: str) -> Path:
     return data_dir / "images" / relative_path
 
 
+def _fetch_remote_media_index() -> list[dict]:
+    """从服务器拉取 media_index.json。"""
+    import paramiko
+    cli = paramiko.SSHClient()
+    cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    cli.connect("43.129.183.181", username="ubuntu", password="Alfie000301")
+    sftp = cli.open_sftp()
+    try:
+        with sftp.open("/data/media_index.json", "r") as f:
+            data = json.loads(f.read().decode("utf-8"))
+    finally:
+        sftp.close()
+        cli.close()
+    return data
+
+def _scan_local_images(images_dir: Path) -> list[dict]:
+    """扫描本地 images/ 目录。
+
+    规则：子目录名 = category (例 images/11山东/foo.png -> category="11山东")
+    顶层散放的图会被忽略（无法确定 category，必须由用户告知）。
+    """
+    if not images_dir.exists():
+        return []
+    out: list[dict] = []
+    for sub in sorted(images_dir.iterdir()):
+        if not sub.is_dir():
+            continue
+        category = sub.name
+        for img in sorted(sub.iterdir()):
+            if not img.is_file():
+                continue
+            if img.suffix.lower() not in SUPPORTED_SUFFIXES:
+                continue
+            try:
+                rel = img.relative_to(SCRIPT_DIR / "data")
+            except ValueError:
+                rel = img
+            out.append({
+                "image_path": str(rel.as_posix()),
+                "image_name": img.name,
+                "category": category,
+                "size": img.stat().st_size,
+            })
+    return out
+
+
+def _reconcile_plan() -> dict:
+    """对账: 扫描 images/ 目录 + 服务器 media_index, 生成 ops.json 草稿。
+
+    保留 ops.json 里现有的 delete 操作（避免 plan 误覆盖用户手编的删除）。
+    """
+    images_dir = SCRIPT_DIR / "data" / "images"
+    local = _scan_local_images(images_dir)
+
+    # 顶层散放图（无 category）警告
+    top_level: list[Path] = []
+    if images_dir.exists():
+        for p in images_dir.iterdir():
+            if p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES:
+                top_level.append(p)
+    if top_level:
+        logger.warning(
+            "发现 %d 张图直接放在 images/ 根目录, 无法推断 category: %s",
+            len(top_level),
+            ", ".join(p.name for p in top_level),
+        )
+        logger.warning("必须放到子目录 (例 images/11山东/foo.png), 重新跑 plan")
+
+    logger.info("正在拉取服务器 media_index.json ...")
+    remote = _fetch_remote_media_index()
+    by_name: dict[tuple[str, str], dict] = {
+        (it.get("image_name", ""), it.get("category", "")): it
+        for it in remote
+    }
+    logger.info("服务器: %d 条, 本地扫描: %d 张", len(remote), len(local))
+
+    ops: list[dict] = []
+    for item in local:
+        key = (item["image_name"], item["category"])
+        match = by_name.get(key)
+        op: dict = {
+            "operation": "update" if match else "create",
+            "image_path": item["image_path"],
+            "image_name": item["image_name"],
+            "category": item["category"],
+        }
+        if match:
+            op["media_id"] = match["media_id"]
+            op["_reason"] = "同名同 category, 服务器已存在 -> 覆盖"
+        else:
+            op["_reason"] = "本地新增 -> 上传到微信"
+        ops.append(op)
+
+    # 保留现有 ops.json 里的 delete 操作 (避免 plan 误覆盖)
+    existing = OPS_FILE
+    if existing.exists():
+        try:
+            cur = json.loads(existing.read_text())
+            for op in cur.get("operations", []):
+                if op.get("operation") == "delete":
+                    ops.append({
+                        **op,
+                        "_reason": "从上次 ops.json 保留的 delete 操作",
+                    })
+        except Exception:
+            pass
+
+    # 标出"服务器有但本地无"的图（不自动 delete, 避免误删）
+    local_keys = {(i["image_name"], i["category"]) for i in local}
+    stale: list[dict] = []
+    for (n, c), m in by_name.items():
+        if (n, c) not in local_keys:
+            stale.append({
+                "image_name": n, "category": c, "media_id": m["media_id"],
+                "_reason": "服务器有, 本地无 -> 如要删除请手动加 delete 操作",
+            })
+
+    return {"operations": ops, "stale_on_server": stale}
+
+
+def _write_ops(config: dict) -> None:
+    OPS_FILE.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
+
+
+def cmd_plan(_args: argparse.Namespace) -> int:
+    config = _reconcile_plan()
+    _write_ops(config)
+
+    creates = sum(1 for op in config["operations"] if op["operation"] == "create")
+    updates = sum(1 for op in config["operations"] if op["operation"] == "update")
+    stale = len(config["stale_on_server"])
+
+    print()
+    print("=" * 60)
+    print(f"ops.json 草稿已生成: {OPS_FILE}")
+    print("=" * 60)
+    print(f"  新增 create: {creates}")
+    print(f"  更新 update: {updates}")
+    print(f"  服务器多余 (不会自动删): {stale}")
+    print()
+    if creates or updates:
+        print("下一步: 检查 ops.json, 确认无误后执行")
+        print("  python3 scripts/image_ops/batch_image_operations.py run")
+    if stale:
+        print()
+        print("服务器有但本地无的图 (如要删除, 手动编辑 ops.json 加 delete):")
+        for s in config["stale_on_server"][:10]:
+            print(f"  - {s['image_name']}  ({s['category']})")
+        if len(config["stale_on_server"]) > 10:
+            print(f"  ... 还有 {len(config['stale_on_server']) - 10} 条")
+    return 0
+
+
+def cmd_show(_args: argparse.Namespace) -> int:
+    if not OPS_FILE.exists():
+        print(f"ops.json 不存在: {OPS_FILE}")
+        print("先跑 plan: python3 scripts/image_ops/batch_image_operations.py plan")
+        return 1
+    print(OPS_FILE.read_text())
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    config_path = Path(args.config).resolve() if args.config else OPS_FILE
+    return main(config_path)
+
+
 def _upload_local_asset(
     image_path: Path, image_name: str, category: str
 ) -> bool:
@@ -280,13 +447,21 @@ def main(config_path: Path) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="批量处理参访方案图片的增删改操作")
-    parser.add_argument(
-        "--config", "-c",
-        type=str,
-        default=str(OPS_FILE),
-        help=f"配置文件路径 (默认: {OPS_FILE})"
-    )
-    args = parser.parse_args()
+    sub = parser.add_subparsers(dest="cmd", required=True)
 
-    config_path = Path(args.config).resolve()
-    main(config_path)
+    p_plan = sub.add_parser("plan", help="扫描 images/ 目录 + 对账 media_index, 生成 ops.json 草稿")
+    p_plan.set_defaults(func=cmd_plan)
+
+    p_run = sub.add_parser("run", help="执行 ops.json (默认读当前 ops.json)")
+    p_run.add_argument(
+        "--config", "-c",
+        type=str, default=None,
+        help=f"配置文件路径 (默认: {OPS_FILE})",
+    )
+    p_run.set_defaults(func=cmd_run)
+
+    p_show = sub.add_parser("show", help="打印当前 ops.json")
+    p_show.set_defaults(func=cmd_show)
+
+    args = parser.parse_args()
+    sys.exit(args.func(args))
