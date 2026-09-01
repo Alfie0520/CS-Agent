@@ -53,6 +53,8 @@ from PIL import Image
 SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".bmp"}
 MAX_IMAGE_SIZE = 200 * 1024
 REMOTE_API_KEY = "cRgCWNHkfrZt7GE47JQtyE9RDY2Pxo4lAs9DQjuSXUY="
+REMOTE_API_URL = "https://43.129.183.181/api/visit-image"
+REMOTE_ASSETS_URL = "https://43.129.183.181/api/assets/image"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,8 +64,6 @@ logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 OPS_FILE = SCRIPT_DIR / "data" / "ops.json"
-REMOTE_API_URL = "https://43.129.183.181/api/visit-image"
-
 
 def load_config(config_path: Path) -> dict:
     if not config_path.exists():
@@ -166,6 +166,37 @@ def resolve_image_path(relative_path: str) -> Path:
     return data_dir / "images" / relative_path
 
 
+def _upload_local_asset(
+    image_path: Path, image_name: str, category: str
+) -> bool:
+    """同步把图片推到本地资产库 (/api/assets/image) 并 rescan asset_index。
+
+    为什么需要这一步：
+    远程 /api/visit-image 只把图片上传到微信素材库并写 /data/media_index.json，
+    但 agent 实际查询的是本地 /data/cs-agent-assets/asset_index.json（见
+    app/assets/index.py）。如果只调 /api/visit-image 而不同步本地，新图
+    对客服 agent 不可见。
+    """
+    try:
+        with open(image_path, "rb") as f:
+            files = {"image_file": (image_name, f, "application/octet-stream")}
+            data = {"category": category, "image_name": image_name, "api_key": REMOTE_API_KEY}
+            with httpx.Client(timeout=60, verify=False) as client:
+                resp = client.post(REMOTE_ASSETS_URL, files=files, data=data)
+        result = resp.json()
+        if result.get("success"):
+            logger.info("  ✓ 本地同步: count=%s", result.get("count", ""))
+            return True
+        logger.error("  ✗ 本地同步失败: %s", result.get("error", "未知错误"))
+        return False
+    except httpx.HTTPError as e:
+        logger.error("  ✗ 本地同步请求失败: %s", e)
+        return False
+    except Exception:
+        logger.exception("  ✗ 本地同步异常")
+        return False
+
+
 def execute_operation(op: dict, index: int, total: int) -> bool:
     operation = op["operation"]
     image_name = op.get("image_name", "")
@@ -199,12 +230,16 @@ def execute_operation(op: dict, index: int, total: int) -> bool:
             response = client.post(REMOTE_API_URL, data=form_data)
         result = response.json()
 
-        if result.get("success"):
-            logger.info("  ✓ 成功: media_id=%s", result.get("media_id", ""))
-            return True
-        else:
+        if not result.get("success"):
             logger.error("  ✗ 失败: %s", result.get("error", "未知错误"))
             return False
+
+        logger.info("  ✓ 微信素材: media_id=%s", result.get("media_id", ""))
+
+        # create/update 成功后再同步本地资产库（让 agent 能查到这张图）
+        if operation in {"create", "update"}:
+            return _upload_local_asset(resolved_path, image_name, category)
+        return True
     except httpx.HTTPError as e:
         logger.error("  ✗ 请求失败: %s", e)
         return False

@@ -192,6 +192,41 @@ for item in media_index:
         print(f"新增成功: {item}")
 ```
 
+#### 步骤7：验证本地资产库同步（关键步骤）
+
+> ⚠️ **不要跳过这一步**！
+>
+> `batch_image_operations.py` 现在会做两件事：
+> 1. 调 `/api/visit-image` → 写微信素材库 + `media_index.json`
+> 2. 调 `/api/assets/image` → 写本地 `/data/cs-agent-assets/images/` + rescan `asset_index.json`
+>
+> 但**只有 `media_index.json` 还不够**：客服 agent 的 `send_visit_scheme_assets`
+> 工具查的是本地 `asset_index.json`（见 `app/assets/index.py`），
+> 历史上因此翻车过（5 月底重构后，13 张新图都查不到）。
+>
+> 验证方法（搜任意一张本轮新增的图）：
+
+```python
+import httpx
+r = httpx.get(
+    "https://43.129.183.181/api/assets/search",
+    params={"query": "兔宝宝"},
+    headers={"X-API-Key": "<api_key>"},
+    verify=False,
+)
+print(r.json())  # count >= 1 才对
+```
+
+如果发现新增图查不到（说明 batch_image_operations.py 同步本地这一步失败了），
+可以手动重灌：
+
+```bash
+# 全量重灌：从 media_index 拉全部图片到本地 + rescan
+export CS_AGENT_BASE_URL="https://43.129.183.181"
+export CS_AGENT_API_KEY="<api_key>"
+./agent_maintenance/scripts/restore_assets.sh
+```
+
 ---
 
 ## 工作流二：企业数据更新
