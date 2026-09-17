@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,11 @@ class KfChannelAdapter:
             parts.append(tail)
         text = "\n".join(parts)
         return await self.send_text(user_id, text)
+
+    async def download_media(self, media_id: str, dest_path: str | Path) -> dict[str, Any]:
+        from app.kf_api import media
+
+        return await media.download_temporary_media(media_id, dest_path)
 
     async def get_user_info(self, user_id: str) -> dict[str, Any]:
         from app.kf_api.client import kf_post

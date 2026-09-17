@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     minimax_api_key: str = ""
     minimax_base_url: str = "https://api.minimax.chat/v1"
     minimax_model: str = "MiniMax-Text-01"
+
+    # 语音识别（ASR，阿里云百炼 DashScope 的 OpenAI 兼容接口）
+    # 仅在微信客服渠道需要：公众号渠道优先用微信下发的 Recognition 字段，不会走到这里。
+    asr_api_key: str = ""
+    asr_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    asr_model: str = "qwen3-asr-flash"
+    # 留空则由模型自动判断语种；识别短语音不稳定时可设为 zh
+    asr_language: str = ""
     
     # 动态提示词配置
     prompt_base_role_path: str = "app/prompts/base_role.md"

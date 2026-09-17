@@ -48,6 +48,7 @@ def parse_xml(raw: bytes) -> IncomingMessage:
         msg.media_id = _text(root, "MediaId")
         msg.format = _text(root, "Format")
         msg.media_id_16k = _text(root, "MediaId16K")
+        msg.recognition = _text(root, "Recognition")
 
     elif msg_type in (MsgType.VIDEO, MsgType.SHORT_VIDEO):
         msg.media_id = _text(root, "MediaId")

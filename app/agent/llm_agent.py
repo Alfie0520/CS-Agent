@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,6 +16,8 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agent.base import BaseAgent
 from app.agent.session_store import SessionStore
+from app.asr import client as asr_client
+from app.asr.audio import to_mp3_16k_mono
 from app.assets.delivery import AssetDeliveryService
 from app.assets.index import load_asset_index, search_assets as search_asset_records
 from app.channel.base import ChannelAdapter
@@ -728,6 +732,10 @@ _WELCOME = (
 
 _UNSUPPORTED_TYPE_REPLY = "暂不支持该类型消息，请发送文字进行咨询。"
 
+# 自行识别语音前先安抚，避免用户长时间看不到反馈而重复发送语音
+_VOICE_ACK = "收到您的语音啦，我先转成文字，稍等一下~"
+_VOICE_UNRECOGNIZED_REPLY = "抱歉，这条语音我没能听清，麻烦您用文字描述一下~"
+
 
 class LLMAgent(BaseAgent):
     """pydantic-ai + MiniMax 驱动的客服 Agent，支持多轮对话与工具调用。"""
@@ -749,13 +757,85 @@ class LLMAgent(BaseAgent):
         # 其他事件（unsubscribe / SCAN / VIEW 等）无需回复
         return AgentResponse()
 
+    async def _resolve_voice_text(self, msg: IncomingMessage) -> str | None:
+        """把语音消息转成文本。
+
+        优先使用微信已经识别好的结果（公众号后台开启「语音识别」后 XML 会带
+        Recognition 字段，零延迟零成本）；没有该字段时，再自行下载语音并调用 ASR。
+        """
+        recognition = (msg.recognition or "").strip()
+        if recognition:
+            logger.info(
+                "voice recognition reused from wechat channel=%s chars=%s",
+                self._channel.channel_name,
+                len(recognition),
+            )
+            return recognition
+
+        if not msg.media_id:
+            logger.warning(
+                "voice message without media_id channel=%s user=%s",
+                self._channel.channel_name,
+                msg.from_user,
+            )
+            return None
+
+        # 下载 + 转码 + 识别有耗时，先给用户一个反馈
+        try:
+            await self._channel.send_text(msg.from_user, _VOICE_ACK)
+        except Exception:
+            logger.exception("failed to send voice ack to %s", msg.from_user)
+
+        started = time.perf_counter()
+        tmp_dir = Path(tempfile.mkdtemp(prefix="cs-agent-voice-"))
+        try:
+            suffix = (msg.format or "amr").lower().lstrip(".") or "amr"
+            raw_path = tmp_dir / f"voice.{suffix}"
+            download = await self._channel.download_media(msg.media_id, raw_path)
+            if download.get("errcode", 0) != 0:
+                logger.error("voice download failed: %s", download)
+                return None
+
+            mp3_path = tmp_dir / "voice.mp3"
+            if not await to_mp3_16k_mono(raw_path, mp3_path):
+                return None
+
+            text = await asr_client.transcribe(mp3_path)
+            logger.info(
+                "voice transcribed channel=%s user=%s elapsed_ms=%.1f chars=%s",
+                self._channel.channel_name,
+                msg.from_user,
+                (time.perf_counter() - started) * 1000,
+                len(text or ""),
+            )
+            return text
+        except Exception:
+            logger.exception(
+                "voice transcription failed for %s elapsed_ms=%.1f",
+                msg.from_user,
+                (time.perf_counter() - started) * 1000,
+            )
+            return None
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
     async def _handle_message(self, msg: IncomingMessage) -> AgentResponse:
-        if msg.msg_type != MsgType.TEXT:
+        if msg.msg_type == MsgType.VOICE:
+            voice_text = await self._resolve_voice_text(msg)
+            if not voice_text:
+                return AgentResponse(
+                    replies=[
+                        ReplyContent(msg_type="text", text=_VOICE_UNRECOGNIZED_REPLY)
+                    ]
+                )
+            user_input = voice_text.strip()
+        elif msg.msg_type == MsgType.TEXT:
+            user_input = (msg.content or "").strip()
+        else:
             return AgentResponse(
                 replies=[ReplyContent(msg_type="text", text=_UNSUPPORTED_TYPE_REPLY)]
             )
 
-        user_input = (msg.content or "").strip()
         if not user_input:
             return AgentResponse()
 

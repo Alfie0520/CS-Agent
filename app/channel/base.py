@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -31,6 +32,10 @@ class ChannelAdapter(Protocol):
         tail: str,
     ) -> dict[str, Any]:
         """发送菜单消息。"""
+        ...
+
+    async def download_media(self, media_id: str, dest_path: str | Path) -> dict[str, Any]:
+        """下载用户发来的媒体文件（如语音）到本地。"""
         ...
 
     async def get_user_info(self, user_id: str) -> dict[str, Any]:

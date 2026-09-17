@@ -78,7 +78,7 @@ async def _transition_to_ai(open_kfid: str, external_userid: str) -> None:
 def _parse_kf_message(raw: dict) -> IncomingMessage | None:
     """将 sync_msg 返回的单条消息 JSON 转为 IncomingMessage。
 
-    目前只处理 text 和 enter_session 事件。
+    目前只处理 text、voice（客户语音）和 enter_session 事件。
     """
     origin = raw.get("origin", 0)
     # origin: 3=客户发送, 4=系统推送, 5=接待人员发送
@@ -97,6 +97,22 @@ def _parse_kf_message(raw: dict) -> IncomingMessage | None:
             create_time=raw.get("send_time", 0),
             msg_type=MsgType.TEXT,
             content=text_content,
+            msg_id=raw.get("msgid", ""),
+            channel="kf",
+        )
+    elif msgtype == "voice":
+        media_id = raw.get("voice", {}).get("media_id", "")
+        if not media_id:
+            logger.warning("KF voice message without media_id user=%s", external_userid)
+            return None
+        return IncomingMessage(
+            to_user=raw.get("open_kfid", ""),
+            from_user=external_userid,
+            create_time=raw.get("send_time", 0),
+            msg_type=MsgType.VOICE,
+            media_id=media_id,
+            # sync_msg 默认按 voice_format=0 返回 Amr
+            format="amr",
             msg_id=raw.get("msgid", ""),
             channel="kf",
         )

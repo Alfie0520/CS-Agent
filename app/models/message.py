@@ -48,6 +48,8 @@ class IncomingMessage:
     # voice
     format: Optional[str] = None
     media_id_16k: Optional[str] = None
+    # 微信的语音识别结果，仅公众号后台开启「语音识别」后才会下发
+    recognition: Optional[str] = None
 
     # video / shortvideo
     thumb_media_id: Optional[str] = None

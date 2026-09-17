@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 
@@ -27,6 +28,10 @@ class OfficialAccountAdapter:
     ) -> dict[str, Any]:
         from app.wechat_api import customer_message
         return await customer_message.send_menu(user_id, head, items, tail)
+
+    async def download_media(self, media_id: str, dest_path: str | Path) -> dict[str, Any]:
+        from app.wechat_api import media
+        return await media.download_temporary_media(media_id, dest_path)
 
     async def get_user_info(self, user_id: str) -> dict[str, Any]:
         from app.wechat_api.client import wechat_get
