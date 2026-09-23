@@ -75,6 +75,45 @@ class AssetRouterTest(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertEqual(True, response.json()["success"])
 
+    def test_upload_removes_same_stem_shadowing_file(self):
+        """同目录同名不同后缀的旧文件必须被清掉，否则索引出现重复 asset_id。"""
+        self.client.post(
+            "/api/assets/image",
+            data={"api_key": "secret", "category": "16陕西", "image_name": "联想.jpg"},
+            files={"image_file": ("联想.jpg", b"old", "image/jpeg")},
+        )
+        response = self.client.post(
+            "/api/assets/image",
+            data={"api_key": "secret", "category": "16陕西", "image_name": "联想.png"},
+            files={"image_file": ("联想.png", b"new", "image/png")},
+        )
+
+        payload = response.json()
+        self.assertEqual(True, payload["success"])
+        self.assertEqual(["联想.jpg"], payload["removed_shadowing"])
+
+        category_dir = self.root / "assets" / "images" / "16陕西"
+        self.assertEqual(["联想.png"], sorted(p.name for p in category_dir.iterdir()))
+
+        items = self.client.get("/api/assets", params={"api_key": "secret"}).json()["items"]
+        self.assertEqual(1, len([x for x in items if x["asset_id"] == "visit_image:16陕西:联想"]))
+
+    def test_upload_keeps_other_stem_files(self):
+        self.client.post(
+            "/api/assets/image",
+            data={"api_key": "secret", "category": "16陕西", "image_name": "联想.jpg"},
+            files={"image_file": ("联想.jpg", b"old", "image/jpeg")},
+        )
+        response = self.client.post(
+            "/api/assets/image",
+            data={"api_key": "secret", "category": "16陕西", "image_name": "联想（新）.png"},
+            files={"image_file": ("联想（新）.png", b"new", "image/png")},
+        )
+
+        self.assertEqual([], response.json()["removed_shadowing"])
+        stats = self.client.get("/api/assets/stats", params={"api_key": "secret"}).json()
+        self.assertEqual(2, stats["count"])
+
 
 if __name__ == "__main__":
     unittest.main()

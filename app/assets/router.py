@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from app.assets.index import (
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
+
+logger = logging.getLogger(__name__)
 
 
 def _check_api_key(api_key: str | None, x_api_key: str | None = None) -> dict[str, Any] | None:
@@ -45,6 +48,25 @@ def _atomic_write_bytes(path: Path, content: bytes) -> None:
     tmp_path = path.with_name(f".{path.name}.tmp")
     tmp_path.write_bytes(content)
     os.replace(tmp_path, path)
+
+
+def _remove_shadowing_siblings(category_dir: Path, filename: str) -> list[str]:
+    """删除同目录下「同名不同后缀」的旧文件。
+
+    资产索引用 (category, 文件名主干) 生成 asset_id，若 `联想.jpg` 与 `联想.png`
+    并存，索引里会出现两条相同 asset_id 的记录，而 get_asset 只取排序后的第一条
+    （.jpg 排在 .png 前），导致刚上传的新图取不到。上传新图时清掉旧后缀即可。
+    """
+    stem = Path(filename).stem
+    removed: list[str] = []
+    for sibling in sorted(category_dir.iterdir()):
+        if not sibling.is_file() or sibling.name == filename:
+            continue
+        if sibling.stem == stem and sibling.suffix.lower() in _IMAGE_SUFFIXES:
+            sibling.unlink()
+            removed.append(sibling.name)
+            logger.info("asset_upsert removed_shadowing file=%s", sibling)
+    return removed
 
 
 @router.get("")
@@ -142,11 +164,13 @@ async def upsert_image_asset_api(
         return {"success": False, "error": "image file is empty"}
 
     asset_root, index_path = _asset_paths()
-    target = asset_root / "images" / category_path / filename
+    category_dir = asset_root / "images" / category_path
+    target = category_dir / filename
     _atomic_write_bytes(target, content)
+    removed = _remove_shadowing_siblings(category_dir, filename)
     items = rescan_image_assets(asset_root, index_path)
     asset = next((x for x in items if Path(x.get("path", "")).name == filename and x.get("category") == category_path.as_posix()), None)
-    return {"success": True, "count": len(items), "asset": asset}
+    return {"success": True, "count": len(items), "asset": asset, "removed_shadowing": removed}
 
 
 @router.get("/{asset_id:path}")

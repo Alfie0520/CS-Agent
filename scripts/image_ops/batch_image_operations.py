@@ -44,7 +44,9 @@ import base64
 import io
 import json
 import logging
+import shutil
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -64,6 +66,7 @@ logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 OPS_FILE = SCRIPT_DIR / "data" / "ops.json"
+PROCESSED_ROOT = SCRIPT_DIR / "data" / "processed"
 
 def load_config(config_path: Path) -> dict:
     if not config_path.exists():
@@ -415,6 +418,30 @@ def execute_operation(op: dict, index: int, total: int) -> bool:
         return False
 
 
+def archive_processed(operations: list[dict], results: list[bool]) -> int:
+    """把已成功处理的图片移到 data/processed/<时间戳>/。
+
+    不归档的话，下次 plan 会重新扫到这些历史图片并为它们生成 update 操作，
+    造成重复上传（一个批次越滚越大）。只归档成功的操作：失败的图留在
+    images/ 里，重新跑 plan 即可只重试失败的那几张。
+    """
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    moved = 0
+    for op, ok in zip(operations, results):
+        if not ok or op.get("operation") not in {"create", "update"}:
+            continue
+        src = resolve_image_path(op.get("image_path", ""))
+        if not src.is_file():
+            continue
+        dst = PROCESSED_ROOT / stamp / op.get("category", "") / src.name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        moved += 1
+    if moved:
+        logger.info("已归档 %d 张已处理图片 -> %s", moved, PROCESSED_ROOT / stamp)
+    return moved
+
+
 def main(config_path: Path) -> None:
     config = load_config(config_path)
     operations = config.get("operations", [])
@@ -440,6 +467,7 @@ def main(config_path: Path) -> None:
     success = sum(1 for r in results if r)
     fail = len(results) - success
     logger.info("完成：成功 %d，失败 %d", success, fail)
+    archive_processed(operations, results)
 
     if fail > 0:
         sys.exit(1)

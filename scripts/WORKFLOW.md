@@ -220,6 +220,13 @@ python3 scripts/image_ops/batch_image_operations.py run
 3. 调用远程 API 上传/更新/删除（`/api/visit-image`）
 4. 对 create/update，**额外**调 `/api/assets/image` 同步本地资产库（让 agent 能搜到）
 5. 输出执行结果
+6. **自动归档**：把执行成功的图片移到 `data/processed/<时间戳>/<category>/`
+
+> ⚠️ **为什么要自动归档**：`plan` 是按 `data/images/` 全量扫描生成草稿的。如果处理完的图留在原地，
+> 下一批 `plan` 会把它们再次列为 `update`，导致每加一批就重复上传一遍历史图片（批次越滚越大）。
+> 归档只针对**成功**的操作，失败的图会留在 `images/`，重跑 `plan` 即可只重试失败的那几张。
+>
+> 所以**不要**把 `images/` 当图片仓库用，它只是「待处理」暂存区；历史图都在 `data/processed/` 下。
 
 #### 步骤6：验证服务器结果
 再次连接服务器，检查 `media_index.json` 是否正确更新：
@@ -389,6 +396,28 @@ curl -fsS -H "X-API-Key: $CS_AGENT_API_KEY" \
   1. 逐步缩小尺寸（100% → 50% → 25% → 10%）
   2. 逐步降低质量（85 → 70 → 55 → 40 → 30）
   3. 最终质量 20%
+
+### 资产库同名不同后缀遮蔽（已修复）
+
+资产索引的 `asset_id` 是 `visit_image:<category>:<文件名主干>`，不含后缀。历史上资产库有一批
+6 月 1 日批量导入的 `.jpg`，而 `batch_image_operations.py` 是按本地原文件名上传 `.png`，
+于是同目录出现 `联想.jpg` + `联想.png` 两条**相同 asset_id** 的记录。
+
+`get_asset()` 只取索引里排序后的**第一条**，而 `联想.jpg` 排在 `联想.png` 前面 —— 结果是
+**更新图片不生效，agent 一直发旧图**（2026-09-23 在 `03北京/联想`、`广东-深圳/联想`、
+`11山东/福瑞达` 上实际发生过）。
+
+修复：`app/assets/router.py` 的 `POST /api/assets/image` 在写入新文件后，会删除同目录下
+**同名不同后缀**的旧图（响应里返回 `removed_shadowing`）。判定范围仅限同目录 + 同主干 +
+图片后缀，不影响 `联想（新）.png` 这类不同名字。
+
+如果怀疑还有残留，用 `/api/assets` 拉全量索引自查重复 asset_id：
+
+```python
+from collections import Counter
+items = httpx.get(f"{BASE}/api/assets", headers={"X-API-Key": KEY}).json()["items"]
+print({k: v for k, v in Counter(a["asset_id"] for a in items).items() if v > 1})
+```
 
 ### API Key
 `batch_image_operations.py` 中硬编码了 API Key：
